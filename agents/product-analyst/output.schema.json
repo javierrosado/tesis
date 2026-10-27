@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "agents/product-analyst/output.schema.json",
+  "title": "UserStorySet",
+  "description": "Salida de product-analyst-agent: historias de usuario con criterios Given/When/Then.",
+  "type": "object",
+  "required": ["req_id", "historias", "preguntas_resueltas", "preguntas_pendientes", "provenance"],
+  "properties": {
+    "req_id": {"type": "string"},
+    "historias": {
+      "type": "array", "minItems": 1, "maxItems": 8,
+      "items": {
+        "type": "object",
+        "required": ["id", "rol", "quiero", "para", "criterios", "reglas_negocio", "puntos"],
+        "properties": {
+          "id": {"type": "string", "pattern": "^US-[0-9]{2}$"},
+          "rol": {"type": "string", "minLength": 3},
+          "quiero": {"type": "string", "minLength": 10},
+          "para": {"type": "string", "minLength": 10},
+          "criterios": {
+            "type": "array", "minItems": 1,
+            "items": {
+              "type": "object",
+              "required": ["given", "when", "then"],
+              "properties": {
+                "given": {"type": "string", "minLength": 5},
+                "when": {"type": "string", "minLength": 5},
+                "then": {"type": "string", "minLength": 5}
+              },
+              "additionalProperties": false
+            }
+          },
+          "reglas_negocio": {"type": "array", "items": {"type": "string", "pattern": "^BR-[0-9]{3}$"}},
+          "puntos": {"type": "integer", "minimum": 1, "maximum": 8}
+        },
+        "additionalProperties": false
+      }
+    },
+    "preguntas_resueltas": {
+      "type": "array",
+      "items": {"type": "object", "required": ["pregunta", "respuesta", "fuente"],
+        "properties": {"pregunta": {"type": "string"}, "respuesta": {"type": "string"}, "fuente": {"type": "string"}},
+        "additionalProperties": false}
+    },
+    "preguntas_pendientes": {"type": "array", "items": {"type": "string"}},
+    "provenance": {"$ref": "../../contracts/provenance.schema.json"}
+  },
+  "additionalProperties": false
+}

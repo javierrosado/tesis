@@ -1,0 +1,13 @@
+openapi: 3.1.0
+info: { title: API Facturación Electrónica (Squad Finanzas, SIM-P06) — contrato publicado, version: 1.1.0 }
+servers: [{ url: /facturacion/v1 }]
+paths:
+  /comprobantes:
+    get:
+      summary: Lista comprobantes emitidos para un pedido
+      parameters: [{ name: pedidoId, in: query, required: true, schema: { type: string } }]
+      responses: { '200': { description: OK } }
+  /comprobantes/{comprobanteId}/pdf:
+    get: { summary: Descarga del PDF del comprobante, responses: { '200': { description: application/pdf } } }
+  /eventos:
+    description: Evento ComprobanteEmitido { pedidoId, comprobanteId, tipo, pais, emitidoEn }

@@ -1,0 +1,26 @@
+# Matriz RACI operativa (Tabla 13 de la tesis), solo la parte que necesita el orquestador.
+# mode: "auto" simula al humano con una política (para corridas batch); "manual" detiene y espera.
+version: "1.0"
+mode: auto
+roles:
+  product_owner:
+    artefacts: [user_story_set, ux_spec]
+    sla_hours: 8
+    delegable: true
+    delegate_to: business_analyst
+    auto_policy:                     # usado solo en mode: auto
+      approve_if_no_findings: true
+      approve_if_only_minor: true
+      delay_hours_sampler: {dist: lognormal, median: 6, p90: 20}
+  tech_lead:
+    artefacts: [domain_model]
+    sla_hours: 8
+    delegable: true
+    delegate_to: senior_dev
+    auto_policy:
+      approve_if_no_findings: true
+      approve_if_only_minor: true
+      delay_hours_sampler: {dist: lognormal, median: 5, p90: 16}
+escalation:
+  after_rounds: 2
+  to: product_owner

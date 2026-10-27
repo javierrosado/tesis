@@ -1,0 +1,37 @@
+{
+ "req_id": "SIM-P05-R001",
+ "artefacto": "user_story_set",
+ "agente_evaluado": "product-analyst-agent",
+ "veredicto": "aprobado",
+ "hallazgos": [
+  {
+   "severidad": "menor",
+   "regla": "estilo",
+   "detalle": "unificar mayúsculas en nombres de estado",
+   "ubicacion": "historias[0].criterios[0].then"
+  }
+ ],
+ "politicas_aplicadas": [
+  "F5.schema_valid",
+  "F5.gwt_ratio",
+  "F5.br_coverage",
+  "POL:seguridad"
+ ],
+ "requiere_humano": true,
+ "provenance": {
+  "contract_version": "1.0",
+  "req_id": "SIM-P05-R001",
+  "agent": "governance-agent",
+  "phase": "discovery",
+  "inputs": [
+   "user_story_set"
+  ],
+  "knowledge_refs": [
+   "BR-010",
+   "BR-011",
+   "POL:seguridad"
+  ],
+  "assumptions": []
+ },
+ "rol_humano": "product_owner"
+}

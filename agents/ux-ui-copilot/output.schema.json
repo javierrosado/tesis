@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "agents/ux-ui-copilot/output.schema.json",
+  "title": "UxSpec",
+  "description": "Salida de ux-ui-copilot-agent: pantallas, flujos y estados de interfaz derivados de las historias.",
+  "type": "object",
+  "required": ["req_id", "pantallas", "flujo", "estados_vacios_error", "accesibilidad", "provenance"],
+  "properties": {
+    "req_id": {"type": "string"},
+    "pantallas": {
+      "type": "array", "minItems": 1,
+      "items": {"type": "object", "required": ["id", "nombre", "historias", "componentes"],
+        "properties": {
+          "id": {"type": "string", "pattern": "^SCR-[0-9]{2}$"},
+          "nombre": {"type": "string"},
+          "historias": {"type": "array", "minItems": 1, "items": {"type": "string", "pattern": "^US-[0-9]{2}$"}},
+          "componentes": {"type": "array", "minItems": 1, "items": {"type": "string"}},
+          "canal": {"type": "string", "enum": ["web", "movil", "ambos"]}
+        }, "additionalProperties": false}
+    },
+    "flujo": {
+      "type": "array", "minItems": 1,
+      "items": {"type": "object", "required": ["desde", "hacia", "accion"],
+        "properties": {"desde": {"type": "string"}, "hacia": {"type": "string"}, "accion": {"type": "string"}},
+        "additionalProperties": false}
+    },
+    "estados_vacios_error": {"type": "array", "items": {"type": "string"}},
+    "accesibilidad": {"type": "array", "items": {"type": "string"}},
+    "provenance": {"$ref": "../../contracts/provenance.schema.json"}
+  },
+  "additionalProperties": false
+}

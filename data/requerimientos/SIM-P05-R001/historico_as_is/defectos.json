@@ -1,0 +1,21 @@
+{
+  "req_id": "SIM-P05-R001",
+  "n_defectos": 2,
+  "defectos": [
+    {
+      "defecto_id": "SIM-DEF-051",
+      "fase_deteccion": "Pruebas",
+      "severidad": "Alta",
+      "fase_origen": "No registrada",
+      "dias_correccion": "5"
+    },
+    {
+      "defecto_id": "SIM-DEF-056",
+      "fase_deteccion": "Producción",
+      "severidad": "Media",
+      "fase_origen": "Código",
+      "dias_correccion": "17"
+    }
+  ],
+  "uso": "Verdad de referencia AS-IS para la rúbrica: tras ejecutar el pipeline, comparar si los defectos equivalentes se habrían detectado antes (test-case-generator/qa-automation/code-review)."
+}

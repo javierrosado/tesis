@@ -1,0 +1,30 @@
+# DAG del vertical Discovery (F3 handoffs). Los nodos de un mismo "parallel" corren a la vez.
+# Cada agente pasa por governance antes de que su artefacto esté disponible para el siguiente.
+version: "1.0"
+pipeline: discovery-vertical
+stages:
+  - id: intake
+    agent: null
+    action: load_business_request      # normaliza brief + restricciones → BusinessRequest
+  - id: stories
+    agent: product-analyst-agent
+    inputs: [intake]
+    review: governance-agent
+    gate: product_owner
+  - id: fanout
+    parallel:
+      - id: domain
+        agent: domain-modeling-agent
+        inputs: [stories]
+        review: governance-agent
+        gate: tech_lead
+      - id: ux
+        agent: ux-ui-copilot-agent
+        inputs: [stories]
+        review: governance-agent
+        gate: product_owner
+  - id: discovery_done
+    action: emit_handoff               # publica artefactos para el dominio Arquitectura
+    inputs: [domain, ux]
+retry:
+  max_governance_rounds: 2             # tras 2 rechazos → escalar a humano

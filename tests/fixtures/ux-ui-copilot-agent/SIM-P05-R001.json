@@ -1,0 +1,68 @@
+{
+ "req_id": "SIM-P05-R001",
+ "pantallas": [
+  {
+   "id": "SCR-01",
+   "nombre": "Mis pedidos",
+   "historias": [
+    "US-01"
+   ],
+   "componentes": [
+    "ListaPedidos",
+    "ChipEstado",
+    "FiltroCampana",
+    "IndicadorActualizacion"
+   ],
+   "canal": "ambos"
+  },
+  {
+   "id": "SCR-02",
+   "nombre": "Detalle del pedido",
+   "historias": [
+    "US-01",
+    "US-02"
+   ],
+   "componentes": [
+    "LineaTiempoEstados",
+    "FechaEstimadaEntrega",
+    "ResumenPedido"
+   ],
+   "canal": "ambos"
+  }
+ ],
+ "flujo": [
+  {
+   "desde": "SCR-01",
+   "hacia": "SCR-02",
+   "accion": "toca una fila de la lista"
+  },
+  {
+   "desde": "SCR-02",
+   "hacia": "SCR-01",
+   "accion": "botón volver"
+  }
+ ],
+ "estados_vacios_error": [
+  "sin pedidos en la campaña vigente",
+  "servicio de logística no disponible: se muestra el último estado conocido con su hora"
+ ],
+ "accesibilidad": [
+  "ChipEstado no depende solo del color: incluye texto",
+  "orden de foco: filtro → lista → detalle",
+  "contraste mínimo 4,5:1 según CONV:convenciones_codigo"
+ ],
+ "provenance": {
+  "contract_version": "1.0",
+  "req_id": "SIM-P05-R001",
+  "agent": "ux-ui-copilot-agent",
+  "phase": "discovery",
+  "inputs": [
+   "output/user_story_set.json"
+  ],
+  "knowledge_refs": [
+   "CONV:convenciones_codigo",
+   "GLOS:Pedido"
+  ],
+  "assumptions": []
+ }
+}

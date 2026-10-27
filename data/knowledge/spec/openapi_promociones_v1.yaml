@@ -1,0 +1,29 @@
+openapi: 3.1.0
+info: { title: API Motor de Promociones (Squad Promociones, SIM-P02) — contrato publicado, version: 2.0.0 }
+servers: [{ url: /promociones/v1 }]
+paths:
+  /evaluar-carrito:
+    post:
+      summary: Evalúa un carrito y devuelve las promociones aplicables y el detalle de beneficios
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/Carrito' } } }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/ResultadoPromociones' } } } }
+        '422': { description: Carrito inválido (RFC 7807) }
+components:
+  schemas:
+    Carrito:
+      type: object
+      required: [pais, campana, nivelConsultora, lineas]
+      properties:
+        pais: { type: string }
+        campana: { type: string, pattern: '^C\d{4}-\d{2}$' }
+        nivelConsultora: { type: string, enum: [Inicial, Plata, Oro, Diamante] }
+        lineas: { type: array, items: { type: object, required: [sku, cantidad, precioCampana], properties: { sku: {type: string}, cantidad: {type: integer, minimum: 1}, precioCampana: {type: number} } } }
+    ResultadoPromociones:
+      type: object
+      properties:
+        promocionesAplicadas: { type: array, items: { type: object, properties: { promocionId: {type: string}, tipo: {type: string, enum: [regalo_por_monto, descuento_combo, dos_por_uno]}, beneficio: {type: string}, terminosId: {type: string} } } }
+        descuentoTotal: { type: number }
+        regalos: { type: array, items: { type: object, properties: { sku: {type: string}, cantidad: {type: integer} } } }

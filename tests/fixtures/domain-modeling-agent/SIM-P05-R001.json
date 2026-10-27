@@ -1,0 +1,113 @@
+{
+ "req_id": "SIM-P05-R001",
+ "entidades": [
+  {
+   "nombre": "Pedido",
+   "atributos": [
+    "id",
+    "consultoraId",
+    "campana",
+    "estado",
+    "fechaDespacho",
+    "zonaEntrega",
+    "fechaEstimadaEntrega"
+   ],
+   "invariantes": [
+    "el estado solo avanza en el orden definido; no hay retrocesos",
+    "fechaEstimadaEntrega existe solo desde el estado despachado"
+   ],
+   "regla_negocio": [
+    "BR-010",
+    "BR-011"
+   ]
+  },
+  {
+   "nombre": "ZonaEntrega",
+   "atributos": [
+    "codigo",
+    "pais",
+    "diasTransito"
+   ],
+   "invariantes": [
+    "diasTransito > 0"
+   ],
+   "regla_negocio": [
+    "BR-011"
+   ]
+  }
+ ],
+ "eventos": [
+  {
+   "nombre": "PedidoAprobado",
+   "entidad": "Pedido",
+   "disparador": "validación de crédito y pedido mínimo"
+  },
+  {
+   "nombre": "PedidoEnPreparacion",
+   "entidad": "Pedido",
+   "disparador": "inicio de picking en bodega"
+  },
+  {
+   "nombre": "PedidoDespachado",
+   "entidad": "Pedido",
+   "disparador": "confirmación de salida de logística"
+  },
+  {
+   "nombre": "PedidoEntregado",
+   "entidad": "Pedido",
+   "disparador": "confirmación de entrega del courier"
+  }
+ ],
+ "transiciones": [
+  {
+   "entidad": "Pedido",
+   "desde": "registrado",
+   "hacia": "aprobado",
+   "evento": "PedidoAprobado"
+  },
+  {
+   "entidad": "Pedido",
+   "desde": "aprobado",
+   "hacia": "en preparación",
+   "evento": "PedidoEnPreparacion"
+  },
+  {
+   "entidad": "Pedido",
+   "desde": "en preparación",
+   "hacia": "despachado",
+   "evento": "PedidoDespachado"
+  },
+  {
+   "entidad": "Pedido",
+   "desde": "despachado",
+   "hacia": "entregado",
+   "evento": "PedidoEntregado"
+  }
+ ],
+ "lenguaje_ubicuo": [
+  {
+   "termino": "Pedido",
+   "definicion": "Solicitud de productos de una consultora para una campaña; pasa por estados registrado → aprobado → en preparación → despachado → entregado (o anulado)."
+  },
+  {
+   "termino": "ZonaEntrega",
+   "definicion": "Agrupación geográfica usada por Logística para asignar días de tránsito."
+  }
+ ],
+ "provenance": {
+  "contract_version": "1.0",
+  "req_id": "SIM-P05-R001",
+  "agent": "domain-modeling-agent",
+  "phase": "discovery",
+  "inputs": [
+   "output/user_story_set.json"
+  ],
+  "knowledge_refs": [
+   "BR-010",
+   "BR-011",
+   "GLOS:Pedido",
+   "SPEC:openapi_pedidos_v1"
+  ],
+  "assumptions": []
+ }
+}

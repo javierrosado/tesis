@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "agents/domain-modeling/output.schema.json",
+  "title": "DomainModel",
+  "description": "Salida de domain-modeling-agent: entidades, eventos de dominio y transiciones derivadas de las historias.",
+  "type": "object",
+  "required": ["req_id", "entidades", "eventos", "transiciones", "lenguaje_ubicuo", "provenance"],
+  "properties": {
+    "req_id": {"type": "string"},
+    "entidades": {
+      "type": "array", "minItems": 1,
+      "items": {"type": "object", "required": ["nombre", "atributos", "invariantes"],
+        "properties": {
+          "nombre": {"type": "string", "pattern": "^[A-Z][A-Za-z]+$"},
+          "atributos": {"type": "array", "minItems": 1, "items": {"type": "string"}},
+          "invariantes": {"type": "array", "items": {"type": "string"}},
+          "regla_negocio": {"type": "array", "items": {"type": "string", "pattern": "^BR-[0-9]{3}$"}}
+        }, "additionalProperties": false}
+    },
+    "eventos": {
+      "type": "array", "minItems": 1,
+      "items": {"type": "object", "required": ["nombre", "entidad", "disparador"],
+        "properties": {"nombre": {"type": "string", "pattern": "^[A-Z][A-Za-z]+$"}, "entidad": {"type": "string"}, "disparador": {"type": "string"}},
+        "additionalProperties": false}
+    },
+    "transiciones": {
+      "type": "array", "minItems": 1,
+      "items": {"type": "object", "required": ["entidad", "desde", "hacia", "evento"],
+        "properties": {"entidad": {"type": "string"}, "desde": {"type": "string"}, "hacia": {"type": "string"}, "evento": {"type": "string"}},
+        "additionalProperties": false}
+    },
+    "lenguaje_ubicuo": {
+      "type": "array",
+      "items": {"type": "object", "required": ["termino", "definicion"],
+        "properties": {"termino": {"type": "string"}, "definicion": {"type": "string"}}, "additionalProperties": false}
+    },
+    "provenance": {"$ref": "../../contracts/provenance.schema.json"}
+  },
+  "additionalProperties": false
+}

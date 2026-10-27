@@ -1,0 +1,17 @@
+name: ci
+on: [push, pull_request]
+jobs:
+  contracts-and-dryrun:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.11"}
+      - run: pip install -r requirements.txt
+      - name: Pruebas de contrato y DAG (proveedor mock)
+        run: pytest -q
+      - name: Dry-run del vertical Discovery
+        env: {PIPELINE_PROVIDER: mock}
+        run: python scripts/run_pipeline.py --req SIM-P05-R001 --telemetry telemetry/ci.jsonl
+      - uses: actions/upload-artifact@v4
+        with: {name: telemetria-ci, path: telemetry/ci.jsonl}

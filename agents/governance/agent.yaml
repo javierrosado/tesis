@@ -1,0 +1,31 @@
+name: governance-agent
+domain: transversal
+phase: discovery   # se instancia por fase; en el vertical actual revisa artefactos de Discovery
+version: "1.0"
+purpose: >
+  Revisar cada artefacto producido frente a las políticas de la Empresa y a los criterios F5 del agente
+  productor; emitir un veredicto (aprobado, rechazado, escalar) con hallazgos accionables y decidir si
+  el artefacto requiere aprobación humana según la matriz RACI.
+prompt: prompt.md
+input_schema: null     # recibe {artefacto, agente_evaluado, criterios_f5, politicas}; se construye en el orquestador
+output_schema: output.schema.json
+requires:
+  json_mode: true
+  context_tokens: 32000
+  language: es
+  tools: [rag.search]
+consumes_from: [product-analyst-agent, domain-modeling-agent, ux-ui-copilot-agent]
+handoff_to: [orchestrator]
+reviewed_by: null
+logic:
+  - "Cargar políticas vigentes del corpus (data/knowledge/politicas) y los criterios F5 del agente evaluado."
+  - "Verificar cumplimiento regla por regla; registrar hallazgos con severidad y ubicación."
+  - "Rechazar si hay ≥1 hallazgo bloqueante; escalar si hay ambigüedad que un humano debe resolver."
+  - "Marcar requiere_humano según gate del agente productor (RACI); nunca aprobar en su lugar."
+verification:
+  - id: schema_valid
+    rule: "schema_valid == true"
+  - id: findings_actionable
+    rule: "findings_actionable == 1.0"
+    description: "todo hallazgo bloqueante o mayor indica ubicación"
+gate: null

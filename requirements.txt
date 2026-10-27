@@ -1,0 +1,13 @@
+# núcleo (CI, dry-run, cualquier proveedor por HTTP)
+jsonschema>=4.20
+PyYAML>=6.0
+pytest>=8.0
+# proveedor hf_local (Fase 2 y 3; instalar en Colab/Kaggle con GPU)
+# torch>=2.3
+# transformers>=4.44
+# accelerate>=0.33
+# bitsandbytes>=0.43
+# outlines>=0.0.46
+# peft>=0.12
+# proveedor anthropic (solo desarrollo interno, Fase 1)
+# anthropic>=0.34

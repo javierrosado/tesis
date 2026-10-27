@@ -1,0 +1,75 @@
+{
+ "req_id": "SIM-P05-R001",
+ "historias": [
+  {
+   "id": "US-01",
+   "rol": "consultora",
+   "quiero": "ver en Mis pedidos el estado actual de cada pedido de la campaña vigente",
+   "para": "saber en qué etapa está sin llamar al centro de atención",
+   "criterios": [
+    {
+     "given": "una consultora autenticada con un pedido en estado 'en preparación'",
+     "when": "abre la sección Mis pedidos",
+     "then": "ve el pedido con la etiqueta 'en preparación' y la fecha de última actualización"
+    },
+    {
+     "given": "un pedido cuyo estado cambió a 'despachado' en el sistema de logística",
+     "when": "la consultora refresca Mis pedidos dentro de los 5 minutos siguientes",
+     "then": "el estado mostrado es 'despachado' y nunca retrocede a uno anterior según BR-010"
+    }
+   ],
+   "reglas_negocio": [
+    "BR-010"
+   ],
+   "puntos": 3
+  },
+  {
+   "id": "US-02",
+   "rol": "consultora",
+   "quiero": "ver la fecha estimada de entrega de mi pedido despachado",
+   "para": "organizar la entrega a mis clientas",
+   "criterios": [
+    {
+     "given": "un pedido en estado 'despachado' con zona de entrega registrada",
+     "when": "la consultora abre el detalle del pedido",
+     "then": "ve la fecha estimada calculada como fecha de despacho más los días de tránsito de su zona (BR-011)"
+    },
+    {
+     "given": "un pedido aún no despachado",
+     "when": "la consultora abre el detalle",
+     "then": "no se muestra fecha estimada sino el texto 'se calculará al despachar'"
+    }
+   ],
+   "reglas_negocio": [
+    "BR-011"
+   ],
+   "puntos": 2
+  }
+ ],
+ "preguntas_resueltas": [
+  {
+   "pregunta": "¿El estado 'en preparación' viene del sistema de logística o del de pedidos?",
+   "respuesta": "Los estados del ciclo son propiedad del sistema de pedidos; logística informa despacho y entrega.",
+   "fuente": "BR-010"
+  }
+ ],
+ "preguntas_pendientes": [
+  "¿Se muestra el número de guía del courier?"
+ ],
+ "provenance": {
+  "contract_version": "1.0",
+  "req_id": "SIM-P05-R001",
+  "agent": "product-analyst-agent",
+  "phase": "discovery",
+  "inputs": [
+   "input/brief.md",
+   "input/restricciones.json"
+  ],
+  "knowledge_refs": [
+   "BR-010",
+   "BR-011",
+   "GLOS:Pedido"
+  ],
+  "assumptions": []
+ }
+}

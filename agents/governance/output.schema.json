@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "agents/governance/output.schema.json",
+  "title": "GovernanceVerdict",
+  "description": "Salida de governance-agent: veredicto sobre un artefacto frente a políticas y criterios F5. Un rechazo devuelve el artefacto al agente productor.",
+  "type": "object",
+  "required": ["req_id", "artefacto", "agente_evaluado", "veredicto", "hallazgos", "politicas_aplicadas", "requiere_humano", "provenance"],
+  "properties": {
+    "req_id": {"type": "string"},
+    "artefacto": {"type": "string"},
+    "agente_evaluado": {"type": "string"},
+    "veredicto": {"type": "string", "enum": ["aprobado", "rechazado", "escalar"]},
+    "hallazgos": {
+      "type": "array",
+      "items": {"type": "object", "required": ["severidad", "regla", "detalle"],
+        "properties": {
+          "severidad": {"type": "string", "enum": ["bloqueante", "mayor", "menor"]},
+          "regla": {"type": "string"},
+          "detalle": {"type": "string"},
+          "ubicacion": {"type": "string"}
+        }, "additionalProperties": false}
+    },
+    "politicas_aplicadas": {"type": "array", "items": {"type": "string"}},
+    "requiere_humano": {"type": "boolean"},
+    "rol_humano": {"type": "string"},
+    "provenance": {"$ref": "../../contracts/provenance.schema.json"}
+  },
+  "additionalProperties": false
+}

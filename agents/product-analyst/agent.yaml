@@ -1,0 +1,49 @@
+name: product-analyst-agent
+domain: discovery
+phase: discovery
+version: "1.0"
+# F1 — Propósito
+purpose: >
+  Convertir una solicitud de negocio (brief + restricciones) en un conjunto de historias de usuario
+  verificables, con criterios de aceptación Given/When/Then y referencia explícita a las reglas de
+  negocio vigentes, resolviendo con el corpus las preguntas abiertas que pueda resolver.
+# F2 — Contrato
+prompt: prompt.md
+input_schema: ../../contracts/business_request.schema.json
+output_schema: output.schema.json
+# Capacidades requeridas del modelo (no un modelo concreto)
+requires:
+  json_mode: true
+  context_tokens: 16000
+  language: es
+  tools: [rag.search]
+# F3 — Handoffs
+consumes_from: [orchestrator]
+handoff_to: [domain-modeling-agent, ux-ui-copilot-agent]
+reviewed_by: governance-agent
+# F4 — Lógica interna (resumen; el detalle está en prompt.md)
+logic:
+  - "Leer brief y restricciones; extraer rol, necesidad y resultado esperado."
+  - "Consultar rag.search por cada regla BR-xxx referenciada y por términos del glosario."
+  - "Redactar 1-8 historias INVEST; cada una con ≥1 criterio Given/When/Then."
+  - "Responder preguntas abiertas solo con evidencia del corpus; el resto se deja pendiente."
+  - "Rellenar provenance con los ids del corpus consultados."
+# F5 — Criterios de verificación (se evalúan en código: core/verify.py)
+verification:
+  - id: schema_valid
+    rule: "schema_valid == true"
+  - id: gwt_ratio
+    rule: "gwt_ratio >= 0.90"
+    description: "proporción de historias con al menos un criterio Given/When/Then completo"
+  - id: br_coverage
+    rule: "br_coverage == 1.0"
+    description: "toda regla BR-xxx del brief aparece en al menos una historia"
+  - id: refinement_rounds
+    rule: "refinement_rounds <= 1"
+    description: "rechazos de governance antes de la aprobación"
+# RACI (Tabla 13)
+gate:
+  role: product_owner
+  artefact: user_story_set
+  sla_hours: 8
+  delegable: true

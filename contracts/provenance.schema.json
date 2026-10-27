@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "contracts/provenance.schema.json",
+  "title": "FieldProvenance",
+  "description": "Bloque común de trazabilidad que todo artefacto de salida debe incluir (H5: origen, fase, agente y decisión).",
+  "type": "object",
+  "required": ["req_id", "agent", "phase", "inputs", "knowledge_refs", "contract_version"],
+  "properties": {
+    "contract_version": {"const": "1.0"},
+    "req_id": {"type": "string"},
+    "agent": {"type": "string"},
+    "phase": {"type": "string", "enum": ["discovery", "arquitectura", "ingenieria", "calidad", "devops"]},
+    "inputs": {"type": "array", "items": {"type": "string"}, "description": "ids/rutas de los artefactos consumidos"},
+    "knowledge_refs": {"type": "array", "items": {"type": "string"}, "description": "ids del corpus (BR-xxx, ADR-xxx, SPEC-xxx) usados"},
+    "assumptions": {"type": "array", "items": {"type": "string"}}
+  },
+  "additionalProperties": false
+}

@@ -1,0 +1,25 @@
+{
+  "req_id": "SIM-P05-R001",
+  "tipo": "Funcional",
+  "origen": "Área de negocio",
+  "campana": "C2025-10",
+  "fecha_registro": "2025-10-07",
+  "fecha_release_comprometida": "2025-12-29",
+  "postergado_en_as_is": false,
+  "puntos_historia": 5,
+  "formato_registro": "Texto libre",
+  "criterios_documentados": false,
+  "datos_personales_involucrados": false,
+  "integracion_externa": null,
+  "no_funcional": false,
+  "reglas_negocio_referenciadas": [
+    "BR-010 Estados del pedido",
+    "BR-011 Fecha estimada de entrega por zona"
+  ],
+  "preguntas_abiertas": [
+    "¿El estado 'en preparación' viene del sistema de logística o del de pedidos?",
+    "¿Se muestra el número de guía del courier?"
+  ],
+  "aprobador_RACI_esperado": "Product Owner",
+  "nuevo_simulado": false
+}

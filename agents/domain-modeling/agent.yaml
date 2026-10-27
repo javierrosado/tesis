@@ -1,0 +1,39 @@
+name: domain-modeling-agent
+domain: discovery
+phase: discovery
+version: "1.0"
+purpose: >
+  Derivar de las historias de usuario el modelo de dominio del requerimiento: entidades con invariantes,
+  eventos de dominio y transiciones de estado, alineados al lenguaje ubicuo del glosario y a las reglas de negocio.
+prompt: prompt.md
+input_schema: ../product-analyst/output.schema.json
+output_schema: output.schema.json
+requires:
+  json_mode: true
+  context_tokens: 16000
+  language: es
+  tools: [rag.search]
+consumes_from: [product-analyst-agent]
+handoff_to: [solution-architect-agent]
+reviewed_by: governance-agent
+logic:
+  - "Identificar sustantivos de las historias como candidatos a entidad; confirmar contra glosario."
+  - "Consultar rag.search por reglas BR-xxx y especificaciones SPEC para invariantes y estados."
+  - "Modelar eventos en pasado (PedidoDespachado) y transiciones completas (desde, hacia, evento)."
+  - "Rellenar provenance con los ids consultados."
+verification:
+  - id: schema_valid
+    rule: "schema_valid == true"
+  - id: ubiquitous_coverage
+    rule: "ubiquitous_coverage == 1.0"
+    description: "toda entidad tiene definición en lenguaje_ubicuo"
+  - id: transitions_complete
+    rule: "transitions_complete == 1.0"
+    description: "toda transición referencia un evento declarado"
+  - id: refinement_rounds
+    rule: "refinement_rounds <= 1"
+gate:
+  role: tech_lead
+  artefact: domain_model
+  sla_hours: 8
+  delegable: true

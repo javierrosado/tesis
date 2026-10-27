@@ -1,0 +1,23 @@
+{
+  "req_id": "SIM-P05-R022",
+  "tipo": "Integración",
+  "origen": "Área de negocio",
+  "campana": "C2025-13",
+  "fecha_registro": "2025-12-27",
+  "fecha_release_comprometida": "2026-02-09",
+  "postergado_en_as_is": false,
+  "puntos_historia": 8,
+  "formato_registro": "Texto libre",
+  "criterios_documentados": true,
+  "datos_personales_involucrados": false,
+  "integracion_externa": "SIM-P03",
+  "no_funcional": false,
+  "reglas_negocio_referenciadas": [
+    "BR-010 Estados del pedido"
+  ],
+  "preguntas_abiertas": [
+    "¿Eventos o polling? ¿Cuál es el contrato actual?"
+  ],
+  "aprobador_RACI_esperado": "Arquitecto de Software",
+  "nuevo_simulado": false
+}

@@ -1,0 +1,24 @@
+{
+  "req_id": "SIM-P05-R028",
+  "tipo": "Funcional",
+  "origen": "Planeamiento de campaña",
+  "campana": "C2026-07",
+  "fecha_registro": "2026-07-02",
+  "fecha_release_comprometida": null,
+  "postergado_en_as_is": false,
+  "puntos_historia": 3,
+  "formato_registro": "Texto libre",
+  "criterios_documentados": false,
+  "datos_personales_involucrados": false,
+  "integracion_externa": null,
+  "no_funcional": false,
+  "reglas_negocio_referenciadas": [
+    "BR-130 Preventa y reserva de lanzamientos",
+    "BR-021 Reserva de stock"
+  ],
+  "preguntas_abiertas": [
+    "¿El cupo se define por zona o por región?"
+  ],
+  "aprobador_RACI_esperado": "Product Owner",
+  "nuevo_simulado": true
+}

@@ -62,3 +62,18 @@ def test_capability_check_blocks_unfit_provider():
     port = ModelPort(Weak(), Telemetry(Path(os.devnull)))
     with pytest.raises(ContractError):
         port.run(REG.agents["product-analyst-agent"], "X", [])
+
+
+def test_dataset_builder_produces_contract_valid_examples(tmp_path, monkeypatch):
+    import subprocess
+    r = subprocess.run([sys.executable, str(ROOT / "scripts/build_dataset.py"), "--variants", "3", "--out", str(tmp_path)], capture_output=True, text=True)
+    assert r.returncode == 0, r.stderr
+    agent = REG.agents["product-analyst-agent"]
+    train = [json.loads(l) for l in (tmp_path / "train.jsonl").read_text(encoding="utf-8").splitlines()]
+    test = [json.loads(l) for l in (tmp_path / "test.jsonl").read_text(encoding="utf-8").splitlines()]
+    assert train and test and not ({e["req_id"] for e in train} & {e["req_id"] for e in test})   # sin fuga entre particiones
+    for e in train[:20]:
+        jsonschema.validate(json.loads(e["messages"][2]["content"]), agent.output_schema)
+    from core.eval_dataset import evaluate_predictions
+    res = evaluate_predictions(agent, test, [e["messages"][2]["content"] for e in test])   # el oro contra sí mismo
+    assert res["aggregate"]["f5_pass"] == 1.0

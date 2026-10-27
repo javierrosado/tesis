@@ -1,0 +1,24 @@
+{
+  "req_id": "SIM-P05-R029",
+  "tipo": "Funcional",
+  "origen": "Área de negocio",
+  "campana": "C2026-07",
+  "fecha_registro": "2026-07-03",
+  "fecha_release_comprometida": null,
+  "postergado_en_as_is": false,
+  "puntos_historia": 5,
+  "formato_registro": "Plantilla parcial",
+  "criterios_documentados": true,
+  "datos_personales_involucrados": false,
+  "integracion_externa": null,
+  "no_funcional": false,
+  "reglas_negocio_referenciadas": [
+    "BR-110 Plazo para reclamar",
+    "BR-160 Motivos y condiciones de devolución"
+  ],
+  "preguntas_abiertas": [
+    "¿La devolución genera nota de crédito automática?"
+  ],
+  "aprobador_RACI_esperado": "Product Owner",
+  "nuevo_simulado": true
+}

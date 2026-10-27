@@ -24,6 +24,7 @@ inyectado por configuración: cambiar de proveedor es editar `config/providers.y
 | Vertical | Agentes | Estado |
 |---|---|---|
 | Discovery | product-analyst, domain-modeling, ux-ui-copilot + governance + knowledge-rag | funcional con `mock`; listo para `hf_local` |
+| Fase 3 | dataset sintético + QLoRA de product-analyst + ablación | `scripts/build_dataset.py`, `notebooks/finetune_qlora.ipynb` |
 | Arquitectura, Ingeniería, Calidad, DevOps | 10 agentes | pendiente (misma plantilla) |
 
 ## Ejecutar
@@ -59,7 +60,9 @@ config/                         providers.yaml · dag.yaml · gates.yaml
 data/knowledge/                 corpus de la Empresa (reglas BR, ADR, specs, políticas, glosario)
 data/requerimientos/<id>/       input/ (brief, restricciones) · output/ (artefactos) · logs/
 tests/fixtures/<agente>/        respuestas grabadas para el proveedor mock
-notebooks/                      run_pilot.ipynb (Fase 2) · finetune_qlora.ipynb (Fase 3, pendiente)
+notebooks/                      run_pilot.ipynb (Fase 2) · finetune_qlora.ipynb (Fase 3)
+scripts/build_dataset.py        dataset sintético por reglas (sin salidas de LLM), partición por requerimiento
+data/datasets/product-analyst/  train/val/test.jsonl (se regenera; no se versiona)
 ```
 
 ## Añadir un agente

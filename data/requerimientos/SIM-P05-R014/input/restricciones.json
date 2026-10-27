@@ -1,0 +1,27 @@
+{
+  "req_id": "SIM-P05-R014",
+  "tipo": "Funcional",
+  "origen": "Planeamiento de campaña",
+  "campana": "C2025-12",
+  "fecha_registro": "2025-11-21",
+  "fecha_release_comprometida": "2025-12-29",
+  "postergado_en_as_is": false,
+  "puntos_historia": 8,
+  "formato_registro": "Plantilla parcial",
+  "criterios_documentados": false,
+  "datos_personales_involucrados": false,
+  "integracion_externa": null,
+  "no_funcional": false,
+  "reglas_negocio_referenciadas": [
+    "BR-060 Acumulación de puntos",
+    "BR-061 Vigencia y caducidad de puntos",
+    "BR-062 Catálogo de premios por campaña"
+  ],
+  "preguntas_abiertas": [
+    "¿Los puntos caducan al cierre de campaña o a los 3 meses?",
+    "¿Se pueden canjear parcialmente?",
+    "¿Qué pasa si se anula el pedido que generó los puntos?"
+  ],
+  "aprobador_RACI_esperado": "Product Owner",
+  "nuevo_simulado": false
+}

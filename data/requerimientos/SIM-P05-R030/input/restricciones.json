@@ -1,0 +1,21 @@
+{
+  "req_id": "SIM-P05-R030",
+  "tipo": "No funcional",
+  "origen": "Mejora técnica",
+  "campana": "C2026-07",
+  "fecha_registro": "2026-07-01",
+  "fecha_release_comprometida": null,
+  "postergado_en_as_is": false,
+  "puntos_historia": 3,
+  "formato_registro": "Plantilla parcial",
+  "criterios_documentados": false,
+  "datos_personales_involucrados": false,
+  "integracion_externa": null,
+  "no_funcional": true,
+  "reglas_negocio_referenciadas": [],
+  "preguntas_abiertas": [
+    "¿Se usa el mismo identificador que facturación?"
+  ],
+  "aprobador_RACI_esperado": "Tech Lead",
+  "nuevo_simulado": true
+}

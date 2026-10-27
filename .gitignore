@@ -5,3 +5,6 @@ telemetry/*.jsonl
 data/requerimientos/*/output/*.json
 data/requerimientos/*/logs/*.jsonl
 .env
+data/datasets/
+telemetry/build_dataset.jsonl
+outputs/

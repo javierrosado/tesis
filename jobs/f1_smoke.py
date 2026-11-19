@@ -2,7 +2,7 @@
 # requires-python = ">=3.11"
 # dependencies = [
 #   "torch", "transformers>=4.51,<4.57", "accelerate", "bitsandbytes",
-#   "outlines==0.1.11", "jsonschema", "PyYAML", "huggingface_hub",
+#   "outlines==0.1.11", "datasets", "jsonschema", "PyYAML", "huggingface_hub",
 # ]
 # ///
 """F1-smoke: vertical Discovery con Qwen3-8B (hf_local) sobre 1 requerimiento, en HF Jobs.
@@ -16,7 +16,7 @@ RUNS_REPO = os.environ["RUNS_REPO"]                       # dataset privado, p. 
 RUN_NAME = os.environ.get("RUN_NAME", "f1_smoke")
 
 url = f"https://github.com/javierrosado/tesis/archive/refs/heads/{BRANCH}.tar.gz"
-tarfile.open(fileobj=io.BytesIO(urllib.request.urlopen(url).read())).extractall("/tmp")
+tarfile.open(fileobj=io.BytesIO(urllib.request.urlopen(url).read())).extractall("/tmp", filter="data")
 root = f"/tmp/tesis-{BRANCH}"
 os.chdir(root)
 env = dict(os.environ, PIPELINE_PROVIDER="hf_local")

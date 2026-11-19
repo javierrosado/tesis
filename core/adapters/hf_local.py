@@ -26,6 +26,7 @@ class HFLocalAdapter:
         if self.adapter_weights:                      # Fase 3: adaptador LoRA del agente entrenado
             from peft import PeftModel
             self.model = PeftModel.from_pretrained(self.model, self.adapter_weights)
+        self.chat_kwargs = cfg.get("chat_template_kwargs", {})   # Qwen3: {"enable_thinking": False}
         self._outlines = None
 
     def capabilities(self) -> dict:
@@ -48,7 +49,7 @@ class HFLocalAdapter:
 
     def complete(self, messages, schema=None, tools=None) -> ModelResponse:
         chat = [{"role": m["role"], "content": m["content"]} for m in messages if not m.get("name")]
-        prompt = self.tok.apply_chat_template(chat, tokenize=False, add_generation_prompt=True)
+        prompt = self.tok.apply_chat_template(chat, tokenize=False, add_generation_prompt=True, **self.chat_kwargs)
         t0 = time.time()
         text = self._generate_json(prompt, schema) if (schema and self.json_grammar) else self._generate_free(prompt)
         model_id = self.model_id + (f"+{self.adapter_weights}" if self.adapter_weights else "")

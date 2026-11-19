@@ -34,6 +34,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--n", type=int, default=200); ap.add_argument("--seed", type=int, default=2026)
     ap.add_argument("--out", default="seeds.jsonl")
+    ap.add_argument("--start", type=int, default=0, help="índice inicial: lotes disjuntos de semillas (R{start+1}…)")
     a = ap.parse_args()
     rng = random.Random(a.seed)
     cat = {}
@@ -43,7 +44,9 @@ def main():
             cat[m.group(1)] = m.group(2)
     pilot_titles = {json.loads(p.read_text(encoding="utf-8"))["req_id"] for p in (ROOT / "data/requerimientos").glob("*/input/restricciones.json")}
     with open(a.out, "w", encoding="utf-8") as f:
-        for i in range(a.n):
+        for _ in range(a.start):            # avanza el generador para que el lote sea idéntico al de una corrida única
+            rng.choice([1, 1, 2, 2, 3]); rng.sample(range(10), 1); rng.choices([0], [1]); rng.choice(PAISES); rng.choice(CANALES); rng.choice(PUNTOS); rng.randint(1, 13); rng.random()
+        for i in range(a.start, a.start + a.n):
             area, brs, solicitante, rol = AREAS[i % len(AREAS)]
             k = rng.choice([1, 1, 2, 2, 3]); reglas = sorted(rng.sample(brs, min(k, len(brs))))
             tipo = rng.choices([t for t, _ in TIPOS], [w for _, w in TIPOS])[0]

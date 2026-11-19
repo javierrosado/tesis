@@ -41,7 +41,7 @@ from core.telemetry import Telemetry         # noqa: E402
 from core.adapters.openai_compat import OpenAICompatAdapter   # noqa: E402
 from huggingface_hub import HfApi            # noqa: E402
 
-subprocess.run([sys.executable, "scripts/gen_seeds.py", "--n", str(N), "--out", "/tmp/seeds.jsonl"], check=True)
+subprocess.run([sys.executable, "scripts/gen_seeds.py", "--n", str(N), "--start", os.environ.get("SEED_START", "0"), "--out", "/tmp/seeds.jsonl"], check=True)
 seeds = [json.loads(l) for l in open("/tmp/seeds.jsonl", encoding="utf-8")]
 teacher = OpenAICompatAdapter({"model": TEACHER, "max_new_tokens": 2048, "temperature": 0.8, "chat_template_kwargs": {"enable_thinking": False}})
 BRIEF_SCHEMA = {"title": "BriefDraft", "type": "object", "additionalProperties": False,

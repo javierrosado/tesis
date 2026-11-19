@@ -32,6 +32,7 @@ class Orchestrator:
         self.rag = KnowledgeRag(self.root / "data/knowledge")
         self.rng = random.Random(seed)
         self.gov = self.reg.agents["governance-agent"]
+        self.examples: list[dict] = []           # F2-A: pares (mensajes ronda 0 → salida aprobada) para destilación
 
     # ---------- utilidades ----------
     def _port(self, agent):
@@ -94,6 +95,8 @@ class Orchestrator:
                 gate = self._gate(agent, verdict, ctx) if agent.gate else {"decision": "approved"}
                 if gate["decision"] in ("approved", "pending"):
                     self._save(ctx, ARTEFACT_NAME[agent_name], out, {"verdict": verdict, "f5": f5, "gate": gate, "model": stats})
+                    self.examples.append({"agent": agent_name, "req_id": req_id, "rounds": round_, "f5": {k: v["value"] for k, v in f5.items()},
+                                          "messages": self._messages(agent, payload, knowledge), "output": out})
                     return out
                 feedback = [{"severidad": "mayor", "regla": "gate_humano", "detalle": f"devuelto por {gate['role']}", "ubicacion": "<raíz>"}]
             elif verdict["veredicto"] == "escalar":

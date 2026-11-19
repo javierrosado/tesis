@@ -31,6 +31,22 @@ providers:
     json_grammar: true                 # decodificación restringida por el JSON Schema (outlines)
     chat_template_kwargs: {enable_thinking: false}   # Qwen3: sin modo razonamiento en salidas JSON
 
+  vllm_local:                          # vLLM en el mismo job de HF (open-weight; sin API keys); sirve también los LoRA
+    adapter: openai_compat
+    model: Qwen/Qwen3-8B
+    url: http://localhost:8000/v1
+    max_new_tokens: 4096
+    temperature: 0.2
+    chat_template_kwargs: {enable_thinking: false}
+
+  teacher:                             # F2-A: modelo maestro para destilación (solo genera el dataset; no entra al piloto)
+    adapter: openai_compat
+    model: Qwen/Qwen3-32B-AWQ
+    url: http://localhost:8000/v1
+    max_new_tokens: 6144
+    temperature: 0.3
+    chat_template_kwargs: {enable_thinking: false}
+
   hf_endpoint:                         # Inference Endpoint dedicado en Hugging Face (opcional)
     adapter: hf_endpoint
     model: Qwen/Qwen3-8B

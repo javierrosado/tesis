@@ -1,0 +1,17 @@
+# Plantilla de corrida. Copiar como configs/<fase>_<nombre>.yaml
+run_name: ejemplo
+fase: F1
+seed: 2026
+model:
+  base: Qwen/Qwen3-8B
+  revision: main            # fijar el commit del modelo antes de la corrida reportada
+  adapter: null             # p. ej. <HF_USERNAME>/product-analyst-lora
+hardware:
+  flavor: l4x1              # ver `hf jobs hardware`
+  timeout: 2h
+  max_cost_usd: 5           # tope declarado; la corrida se aprueba en el chat
+data:
+  dataset: null
+  requerimientos: [SIM-P05-R001]
+outputs:
+  hub_repo: null            # dataset privado donde se suben logs y métricas

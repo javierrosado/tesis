@@ -8,3 +8,8 @@ data/requerimientos/*/logs/*.jsonl
 data/datasets/
 telemetry/build_dataset.jsonl
 outputs/
+
+# entorno local
+.venv/
+*.env
+secrets/

@@ -24,7 +24,7 @@ providers:
 
   hf_local:                            # modelo open-weight en la misma máquina/notebook (Colab T4/L4)
     adapter: hf_local
-    model: Qwen/Qwen2.5-7B-Instruct
+    model: Qwen/Qwen3-8B
     quantization: int4                 # bitsandbytes nf4; cabe en 16 GB
     max_new_tokens: 2048
     temperature: 0.2
@@ -32,13 +32,13 @@ providers:
 
   hf_endpoint:                         # Inference Endpoint dedicado en Hugging Face (opcional)
     adapter: hf_endpoint
-    model: Qwen/Qwen2.5-7B-Instruct
+    model: Qwen/Qwen3-8B
     url_env: HF_ENDPOINT_URL
     token_env: HF_TOKEN
 
   ollama:                              # alternativa local fuera de Colab
     adapter: ollama
-    model: qwen2.5:7b
+    model: qwen3:8b
     url: http://localhost:11434
 
 overrides: {}

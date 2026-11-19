@@ -10,7 +10,7 @@ import gc, json, os, time
 import torch
 from datasets import Dataset
 from huggingface_hub import HfApi, hf_hub_download, whoami
-from peft import LoraConfig
+from peft import LoraConfig, prepare_model_for_kbit_training
 from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
 from trl import SFTConfig, SFTTrainer
 
@@ -41,8 +41,10 @@ for agent in AGENTS:
     model = AutoModelForCausalLM.from_pretrained(BASE, device_map="auto", torch_dtype=torch.bfloat16, attn_implementation="sdpa",
                                                  quantization_config=BitsAndBytesConfig(load_in_4bit=True, bnb_4bit_quant_type="nf4",
                                                                                         bnb_4bit_compute_dtype=torch.bfloat16, bnb_4bit_use_double_quant=True))
+    model = prepare_model_for_kbit_training(model, use_gradient_checkpointing=True, gradient_checkpointing_kwargs={"use_reentrant": False})
+    model.enable_input_require_grads()
     cfg = SFTConfig(output_dir=f"/tmp/out/{agent}", num_train_epochs=EPOCHS, per_device_train_batch_size=1, gradient_accumulation_steps=8,
-                    learning_rate=LR, lr_scheduler_type="cosine", warmup_ratio=0.05, bf16=True, gradient_checkpointing=True,
+                    learning_rate=LR, lr_scheduler_type="cosine", warmup_ratio=0.05, bf16=True, gradient_checkpointing=True, gradient_checkpointing_kwargs={"use_reentrant": False},
                     max_length=MAX_LEN, completion_only_loss=True, packing=False, eval_strategy="epoch", per_device_eval_batch_size=1,
                     logging_steps=5, save_strategy="no", report_to="none", seed=SEED, dataset_kwargs={"add_special_tokens": False})
     lora = LoraConfig(r=RANK, lora_alpha=2 * RANK, lora_dropout=0.05, bias="none", task_type="CAUSAL_LM",

@@ -72,7 +72,7 @@ def write_brief(s: dict) -> None:
         "reglas_negocio_referenciadas": [f"{r['id']} {r['texto'][:40]}" for r in s["reglas"]], "preguntas_abiertas": d["preguntas_abiertas"]}, ensure_ascii=False), encoding="utf-8")
 
 
-examples, stats, lock = [], {"ok": 0, "fail": 0, "skipped": 0}, threading.Lock()
+examples, rejections, stats, lock = [], [], {"ok": 0, "fail": 0, "skipped": 0}, threading.Lock()
 
 
 def run_one(s: dict):
@@ -88,6 +88,7 @@ def run_one(s: dict):
             ok = False; print("fallo", s["req_id"], str(e)[:160], flush=True)
         with lock:
             examples.extend(e for e in orch.examples if e["agent"] in TRAINABLE)
+            rejections.extend(orch.rejections)
             stats["ok" if ok else "fail"] += 1
     except Exception as e:  # noqa: BLE001
         with lock: stats["fail"] += 1
@@ -118,6 +119,8 @@ def publish(final: bool):
         for e in rng.sample(tr, max(1, len(tr) // 10)) if tr else []:
             md.append(f"\n## {agent} · {e['req_id']} · rondas {e['rounds']}\n\n```json\n{json.dumps(e['output'], ensure_ascii=False, indent=1)[:6000]}\n```\n")
     (out / "muestra_revision.md").write_text("".join(md), encoding="utf-8")
+    with lock: rj = list(rejections)
+    (out / "rechazos.jsonl").write_text("".join(json.dumps(r, ensure_ascii=False) + "\n" for r in rj), encoding="utf-8")
     (out / "resumen.json").write_text(json.dumps({"teacher": TEACHER, "branch": BRANCH, "seeds": N, "stats": stats, "counts": counts, "final": final}, indent=1), encoding="utf-8")
     api = HfApi(); api.create_repo(SFT_REPO, repo_type="dataset", private=True, exist_ok=True)
     api.upload_folder(folder_path=str(out), repo_id=SFT_REPO, repo_type="dataset", commit_message=f"{RUN_NAME} {'final' if final else 'parcial'}")

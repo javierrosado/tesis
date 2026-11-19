@@ -32,7 +32,8 @@ class Orchestrator:
         self.rag = KnowledgeRag(self.root / "data/knowledge")
         self.rng = random.Random(seed)
         self.gov = self.reg.agents["governance-agent"]
-        self.examples: list[dict] = []           # F2-A: pares (mensajes ronda 0 → salida aprobada) para destilación
+        self.examples: list[dict] = []
+        self.rejections: list[dict] = []         # diagnóstico: salidas rechazadas por governance con sus hallazgos           # F2-A: pares (mensajes ronda 0 → salida aprobada) para destilación
 
     # ---------- utilidades ----------
     def _port(self, agent):
@@ -89,6 +90,8 @@ class Orchestrator:
         for round_ in range(max_rounds + 1):
             out, stats = self._port(agent).run(agent, req_id, self._messages(agent, payload, knowledge, feedback), variant=f"r{round_}")
             verdict, ok_f5, f5 = self._review(agent, out, ctx, round_)
+            if verdict["veredicto"] == "rechazado":
+                self.rejections.append({"agent": agent_name, "req_id": req_id, "round": round_, "hallazgos": verdict["hallazgos"], "output": out})
             self.tel.emit(event="f5_check", req_id=req_id, agent=agent_name, round=round_, ok=ok_f5, metrics=f5)
             blocking = any(h["severidad"] in ("bloqueante", "mayor") for h in verdict["hallazgos"])
             if verdict["veredicto"] == "aprobado" and not blocking:

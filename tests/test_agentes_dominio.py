@@ -73,3 +73,12 @@ def test_prod_sin_puerta_manual_rechazado():
             g["tipo"] = "automatica"
     v, ok, _ = _rev("cicd-pipeline-agent", o)
     assert not ok and any(h["regla"] == "F5.prod_manual_gate" for h in v["hallazgos"])
+
+
+def test_pytest_con_fences_y_clase():
+    assert verify.pytest_code_ok("```python\nclass TestX:\n    def test_a(self):\n        assert 1\n```")
+
+
+def test_lenguaje_ubicuo_por_contencion():
+    m = verify.metrics_domain_modeling({"entidades": [{"nombre": "Pedido"}], "lenguaje_ubicuo": [{"termino": "Pedido de campaña"}], "eventos": [], "transiciones": []}, {})
+    assert m["ubiquitous_coverage"] == 1.0

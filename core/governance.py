@@ -18,7 +18,7 @@ def _f5_detail(agent_name: str, key: str, out: dict, ctx: dict, res: dict) -> tu
     """Explica qué falta para cumplir el criterio, no solo el valor."""
     if agent_name == "domain-modeling-agent" and key == "ubiquitous_coverage":
         terms = {verify.norm(t.get("termino", "")) for t in out.get("lenguaje_ubicuo", [])}
-        miss = [e["nombre"] for e in out.get("entidades", []) if verify.norm(e.get("nombre", "")) not in terms]
+        miss = [e["nombre"] for e in out.get("entidades", []) if not any(verify.norm(e.get("nombre", "")) == t or verify.norm(e.get("nombre", "")) in t for t in terms)]
         return (f"Cada entidad debe tener una entrada en lenguaje_ubicuo con el mismo nombre exacto. "
                 f"Faltan: {', '.join(miss) or '(ninguna entidad definida)'}", "lenguaje_ubicuo")
     if agent_name == "domain-modeling-agent" and key == "transitions_complete":

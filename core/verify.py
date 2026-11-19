@@ -23,7 +23,8 @@ def metrics_domain_modeling(out: dict, ctx: dict) -> dict:
     terms = {norm(t["termino"]) for t in out.get("lenguaje_ubicuo", [])}
     evs = {e["nombre"] for e in out.get("eventos", [])}
     trs = out.get("transiciones", [])
-    return {"ubiquitous_coverage": (len(ents & terms) / len(ents)) if ents else 0.0,
+    covered = {e for e in ents if any(e == t or (len(e) >= 4 and e in t) for t in terms)}   # "Pedido" ⊂ "Pedido de campaña"
+    return {"ubiquitous_coverage": (len(covered) / len(ents)) if ents else 0.0,
             "transitions_complete": (sum(1 for t in trs if t["evento"] in evs) / len(trs)) if trs else 0.0}
 
 
@@ -91,13 +92,21 @@ def _criteria(ctx: dict) -> set:
     return {(h["id"], n) for h in ctx.get("user_story_set", {}).get("historias", []) for n in range(1, len(h.get("criterios", [])) + 1)}
 
 
+def _strip_code_fences(code: str) -> str:
+    t = code.strip()
+    if t.startswith("```"):
+        t = t.split("\n", 1)[1] if "\n" in t else ""
+        t = t.rsplit("```", 1)[0]
+    return t
+
+
 def pytest_code_ok(code: str) -> bool:
-    import ast
+    import ast, textwrap
     try:
-        tree = ast.parse(code)
+        tree = ast.parse(textwrap.dedent(_strip_code_fences(code)))
     except SyntaxError:
         return False
-    return any(isinstance(n, ast.FunctionDef) and n.name.startswith("test_") for n in ast.walk(tree))
+    return any(isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef)) and n.name.startswith("test_") for n in ast.walk(tree))
 
 
 def metrics_test_cases(out: dict, ctx: dict) -> dict:

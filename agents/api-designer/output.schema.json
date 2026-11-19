@@ -2,12 +2,14 @@
  "$schema": "https://json-schema.org/draft/2020-12/schema",
  "$id": "agents/api-designer/output.schema.json",
  "title": "ApiDesign",
- "description": "Salida de api-designer-agent (Tabla 16): especificación OpenAPI 3.1, endpoints trazados a integraciones, errores RFC 7807 y esquemas de seguridad.",
+ "description": "Salida de api-designer-agent (Tabla 16). El agente decide el diseño (recursos, operaciones, parámetros, esquemas, errores RFC 7807 y seguridad) y core/render.py lo serializa de forma determinista a OpenAPI 3.1, que se valida en F5.",
  "type": "object",
  "required": [
   "req_id",
-  "openapi_yaml",
+  "titulo_api",
+  "version_api",
   "endpoints",
+  "esquemas",
   "errores",
   "esquemas_seguridad",
   "provenance"
@@ -16,10 +18,14 @@
   "req_id": {
    "type": "string"
   },
-  "openapi_yaml": {
+  "titulo_api": {
    "type": "string",
-   "minLength": 50,
-   "description": "documento OpenAPI 3.1 completo en YAML"
+   "minLength": 5,
+   "maxLength": 80
+  },
+  "version_api": {
+   "type": "string",
+   "pattern": "^v[0-9]+$"
   },
   "endpoints": {
    "type": "array",
@@ -29,8 +35,11 @@
      "id",
      "metodo",
      "ruta",
+     "resumen",
      "integraciones",
      "seguridad",
+     "parametros",
+     "respuestas",
      "errores"
     ],
     "properties": {
@@ -50,30 +59,167 @@
      },
      "ruta": {
       "type": "string",
-      "pattern": "^/"
+      "pattern": "^/v[0-9]+(/([a-z0-9_-]+|\\{[a-zA-Z][a-zA-Z0-9_]*\\}))+$",
+      "maxLength": 120
+     },
+     "resumen": {
+      "type": "string",
+      "minLength": 5,
+      "maxLength": 160
      },
      "integraciones": {
       "type": "array",
       "items": {
        "type": "string",
        "pattern": "^INT-[0-9]{3}$"
-      }
+      },
+      "maxItems": 5
      },
      "seguridad": {
       "type": "string",
       "pattern": "^SEC-SCHEME-[0-9]{3}$"
+     },
+     "parametros": {
+      "type": "array",
+      "items": {
+       "type": "object",
+       "required": [
+        "nombre",
+        "en",
+        "requerido",
+        "tipo"
+       ],
+       "properties": {
+        "nombre": {
+         "type": "string",
+         "pattern": "^[a-zA-Z][a-zA-Z0-9_]*$"
+        },
+        "en": {
+         "type": "string",
+         "enum": [
+          "path",
+          "query",
+          "header"
+         ]
+        },
+        "requerido": {
+         "type": "boolean"
+        },
+        "tipo": {
+         "type": "string",
+         "enum": [
+          "string",
+          "integer",
+          "number",
+          "boolean",
+          "array",
+          "object"
+         ]
+        }
+       },
+       "additionalProperties": false
+      },
+      "maxItems": 8
+     },
+     "cuerpo": {
+      "type": "string",
+      "pattern": "^[A-Z][A-Za-z0-9]*$",
+      "description": "nombre de un esquema de la lista esquemas"
+     },
+     "respuestas": {
+      "type": "array",
+      "items": {
+       "type": "object",
+       "required": [
+        "status",
+        "descripcion"
+       ],
+       "properties": {
+        "status": {
+         "type": "integer",
+         "minimum": 200,
+         "maximum": 299
+        },
+        "descripcion": {
+         "type": "string",
+         "minLength": 3,
+         "maxLength": 160
+        },
+        "esquema": {
+         "type": "string",
+         "pattern": "^[A-Z][A-Za-z0-9]*$"
+        }
+       },
+       "additionalProperties": false
+      },
+      "minItems": 1,
+      "maxItems": 3
      },
      "errores": {
       "type": "array",
       "items": {
        "type": "string",
        "pattern": "^ERR-[0-9]{3}$"
-      }
+      },
+      "maxItems": 6
      }
     },
     "additionalProperties": false
    },
-   "minItems": 1
+   "minItems": 1,
+   "maxItems": 12
+  },
+  "esquemas": {
+   "type": "array",
+   "items": {
+    "type": "object",
+    "required": [
+     "nombre",
+     "propiedades"
+    ],
+    "properties": {
+     "nombre": {
+      "type": "string",
+      "pattern": "^[A-Z][A-Za-z0-9]*$"
+     },
+     "propiedades": {
+      "type": "array",
+      "items": {
+       "type": "object",
+       "required": [
+        "nombre",
+        "tipo",
+        "requerido"
+       ],
+       "properties": {
+        "nombre": {
+         "type": "string",
+         "pattern": "^[a-zA-Z][a-zA-Z0-9_]*$"
+        },
+        "tipo": {
+         "type": "string",
+         "enum": [
+          "string",
+          "integer",
+          "number",
+          "boolean",
+          "array",
+          "object"
+         ]
+        },
+        "requerido": {
+         "type": "boolean"
+        }
+       },
+       "additionalProperties": false
+      },
+      "minItems": 1,
+      "maxItems": 20
+     }
+    },
+    "additionalProperties": false
+   },
+   "maxItems": 12
   },
   "errores": {
    "type": "array",
@@ -97,16 +243,19 @@
      },
      "title": {
       "type": "string",
-      "minLength": 3
+      "minLength": 3,
+      "maxLength": 100
      },
      "type": {
       "type": "string",
-      "minLength": 3
+      "minLength": 3,
+      "maxLength": 160
      }
     },
     "additionalProperties": false
    },
-   "minItems": 1
+   "minItems": 1,
+   "maxItems": 10
   },
   "esquemas_seguridad": {
    "type": "array",
@@ -133,12 +282,14 @@
      },
      "descripcion": {
       "type": "string",
-      "minLength": 5
+      "minLength": 5,
+      "maxLength": 200
      }
     },
     "additionalProperties": false
    },
-   "minItems": 1
+   "minItems": 1,
+   "maxItems": 3
   },
   "provenance": {
    "$ref": "../../contracts/provenance.schema.json"

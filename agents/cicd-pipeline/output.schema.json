@@ -2,7 +2,7 @@
  "$schema": "https://json-schema.org/draft/2020-12/schema",
  "$id": "agents/cicd-pipeline/output.schema.json",
  "title": "CicdPipeline",
- "description": "Salida de cicd-pipeline-agent (Tabla 18): pipelines declarativos por ambiente con puertas de calidad y criterios de promoción.",
+ "description": "Salida de cicd-pipeline-agent (Tabla 18). El agente define jobs, pasos y puertas por ambiente; core/render.py lo serializa de forma determinista a workflows YAML de GitHub Actions, que se validan en F5.",
  "type": "object",
  "required": [
   "req_id",
@@ -21,7 +21,8 @@
     "required": [
      "id",
      "ambiente",
-     "yaml",
+     "disparador",
+     "jobs",
      "gates"
     ],
     "properties": {
@@ -37,10 +38,86 @@
        "prod"
       ]
      },
-     "yaml": {
+     "disparador": {
       "type": "string",
-      "minLength": 40,
-      "description": "workflow de GitHub Actions en YAML"
+      "enum": [
+       "push",
+       "pull_request",
+       "workflow_dispatch",
+       "tag"
+      ]
+     },
+     "jobs": {
+      "type": "array",
+      "items": {
+       "type": "object",
+       "required": [
+        "id",
+        "runs_on",
+        "needs",
+        "steps"
+       ],
+       "properties": {
+        "id": {
+         "type": "string",
+         "pattern": "^[a-z][a-z0-9_-]{1,30}$"
+        },
+        "runs_on": {
+         "type": "string",
+         "enum": [
+          "ubuntu-latest",
+          "ubuntu-24.04"
+         ]
+        },
+        "needs": {
+         "type": "array",
+         "items": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_-]{1,30}$"
+         },
+         "maxItems": 4
+        },
+        "environment": {
+         "type": "string",
+         "enum": [
+          "dev",
+          "staging",
+          "prod"
+         ]
+        },
+        "steps": {
+         "type": "array",
+         "items": {
+          "type": "object",
+          "required": [
+           "nombre"
+          ],
+          "properties": {
+           "nombre": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 80
+           },
+           "uses": {
+            "type": "string",
+            "pattern": "^[a-z0-9-]+/[a-z0-9._-]+@v[0-9]+$"
+           },
+           "run": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 300
+           }
+          },
+          "additionalProperties": false
+         },
+         "minItems": 1,
+         "maxItems": 10
+        }
+       },
+       "additionalProperties": false
+      },
+      "minItems": 1,
+      "maxItems": 6
      },
      "gates": {
       "type": "array",
@@ -75,17 +152,20 @@
         },
         "criterio": {
          "type": "string",
-         "minLength": 5
+         "minLength": 5,
+         "maxLength": 200
         }
        },
        "additionalProperties": false
       },
-      "minItems": 1
+      "minItems": 1,
+      "maxItems": 6
      }
     },
     "additionalProperties": false
    },
-   "minItems": 1
+   "minItems": 1,
+   "maxItems": 3
   },
   "promocion": {
    "type": "array",
@@ -113,11 +193,13 @@
      },
      "criterio": {
       "type": "string",
-      "minLength": 5
+      "minLength": 5,
+      "maxLength": 200
      }
     },
     "additionalProperties": false
-   }
+   },
+   "maxItems": 2
   },
   "provenance": {
    "$ref": "../../contracts/provenance.schema.json"

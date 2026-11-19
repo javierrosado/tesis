@@ -20,7 +20,7 @@ logic:
   - "Fijar criterios de promoción entre ambientes según la política de release."
 verification:
   - {id: schema_valid, rule: "schema_valid == true"}
-  - {id: yaml_valid, rule: "yaml_valid == 1.0", description: "todo yaml parsea como workflow (on, jobs, runs-on, steps)"}
+  - {id: yaml_valid, rule: "yaml_valid == 1.0", description: "todo workflow generado es válido (needs existentes, sin ciclos, pasos con run o uses)"}
   - {id: env_coverage, rule: "env_coverage == 1.0", description: "pipelines para dev, staging y prod"}
   - {id: test_stage, rule: "test_stage == 1.0", description: "todo pipeline ejecuta pytest"}
   - {id: prod_manual_gate, rule: "prod_manual_gate == 1.0", description: "prod con puerta manual de despliegue"}

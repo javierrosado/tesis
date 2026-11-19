@@ -1,17 +1,56 @@
 {
  "req_id": "SIM-P05-R001",
- "openapi_yaml": "openapi: 3.1.0\ninfo:\n  title: Seguimiento de pedidos\n  version: 1.0.0\npaths:\n  /v1/pedidos/{pedidoId}/estado:\n    get:\n      operationId: obtenerEstadoPedido\n      parameters:\n        - name: pedidoId\n          in: path\n          required: true\n          schema: {type: string}\n      responses:\n        '200':\n          description: Estado actual del pedido\n        '404':\n          description: Pedido no encontrado (RFC 7807, incluye correlation_id)\n",
+ "titulo_api": "Seguimiento de pedidos",
+ "version_api": "v1",
  "endpoints": [
   {
    "id": "EP-001",
    "metodo": "GET",
    "ruta": "/v1/pedidos/{pedidoId}/estado",
+   "resumen": "Obtiene el estado actual y la fecha estimada de entrega",
    "integraciones": [
     "INT-002"
    ],
    "seguridad": "SEC-SCHEME-001",
+   "parametros": [
+    {
+     "nombre": "pedidoId",
+     "en": "path",
+     "requerido": true,
+     "tipo": "string"
+    }
+   ],
+   "respuestas": [
+    {
+     "status": 200,
+     "descripcion": "Estado actual del pedido",
+     "esquema": "EstadoPedido"
+    }
+   ],
    "errores": [
     "ERR-001"
+   ]
+  }
+ ],
+ "esquemas": [
+  {
+   "nombre": "EstadoPedido",
+   "propiedades": [
+    {
+     "nombre": "pedidoId",
+     "tipo": "string",
+     "requerido": true
+    },
+    {
+     "nombre": "estado",
+     "tipo": "string",
+     "requerido": true
+    },
+    {
+     "nombre": "fechaEstimadaEntrega",
+     "tipo": "string",
+     "requerido": false
+    }
    ]
   }
  ],

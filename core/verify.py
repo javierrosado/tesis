@@ -1,6 +1,6 @@
 """Criterios F5 evaluados en código (no por el modelo). Cada función recibe el artefacto y el contexto y
 devuelve métricas; `evaluate` compara contra las reglas de agent.yaml."""
-import re
+import re, unicodedata
 
 
 def metrics_product_analyst(out: dict, ctx: dict) -> dict:
@@ -12,9 +12,15 @@ def metrics_product_analyst(out: dict, ctx: dict) -> dict:
             "br_coverage": (len(brs_req & brs_out) / len(brs_req)) if brs_req else 1.0}
 
 
+def norm(t: str) -> str:
+    """Compara nombres sin distinguir mayúsculas, tildes, espacios ni guiones (Zona de entrega == ZonaEntrega)."""
+    t = unicodedata.normalize("NFKD", str(t)).encode("ascii", "ignore").decode().lower()
+    return re.sub(r"[^a-z0-9]", "", t)
+
+
 def metrics_domain_modeling(out: dict, ctx: dict) -> dict:
-    ents = {e["nombre"] for e in out.get("entidades", [])}
-    terms = {t["termino"] for t in out.get("lenguaje_ubicuo", [])}
+    ents = {norm(e["nombre"]) for e in out.get("entidades", [])}
+    terms = {norm(t["termino"]) for t in out.get("lenguaje_ubicuo", [])}
     evs = {e["nombre"] for e in out.get("eventos", [])}
     trs = out.get("transiciones", [])
     return {"ubiquitous_coverage": (len(ents & terms) / len(ents)) if ents else 0.0,
@@ -35,8 +41,8 @@ def metrics_governance(out: dict, ctx: dict) -> dict:
 
 def metrics_solution_architect(out: dict, ctx: dict) -> dict:
     adrs = out.get("adrs", [])
-    ents = {e["nombre"] for e in ctx.get("domain_model", {}).get("entidades", [])}
-    assigned = {e for c in out.get("componentes", []) for e in c.get("entidades", [])}
+    ents = {norm(e["nombre"]) for e in ctx.get("domain_model", {}).get("entidades", [])}
+    assigned = {norm(e) for c in out.get("componentes", []) for e in c.get("entidades", [])}
     comps = {c["id"] for c in out.get("componentes", [])}
     ints = out.get("integraciones", [])
     return {"adr_options": (sum(1 for a in adrs if len(a.get("opciones", [])) >= 2 and a.get("consecuencias")) / len(adrs)) if adrs else 0.0,
@@ -44,17 +50,30 @@ def metrics_solution_architect(out: dict, ctx: dict) -> dict:
             "int_refs_valid": (sum(1 for i in ints if i["origen"] in comps and i["destino"] in comps) / len(ints)) if ints else 1.0}
 
 
-def openapi_ok(text: str) -> bool:
-    import yaml
+def openapi_errors(design: dict) -> list[str]:
+    """Valida el OpenAPI 3.1 renderizado y la coherencia de parámetros de ruta."""
+    from openapi_spec_validator import validate
+    from .render import openapi_from_design
+    errs = []
+    for ep in design.get("endpoints", []):
+        declared = {p["nombre"] for p in ep.get("parametros", []) if p["en"] == "path"}
+        used = set(re.findall(r"{([^}]+)}", ep["ruta"]))
+        if used != declared:
+            errs.append(f"{ep['id']}: parámetros de ruta {sorted(used)} y declarados en path {sorted(declared)} no coinciden")
+        for n in [ep.get("cuerpo")] + [r.get("esquema") for r in ep.get("respuestas", [])]:
+            if n and n not in {s["nombre"] for s in design.get("esquemas", [])}:
+                errs.append(f"{ep['id']}: el esquema {n} no está declarado en esquemas")
+    seen = {}
+    for ep in design.get("endpoints", []):
+        k = (ep["ruta"], ep["metodo"])
+        if k in seen:
+            errs.append(f"{ep['id']}: duplica {ep['metodo']} {ep['ruta']} de {seen[k]}")
+        seen[k] = ep["id"]
     try:
-        from openapi_spec_validator import validate
-        doc = yaml.safe_load(text)
-        if not isinstance(doc, dict) or not str(doc.get("openapi", "")).startswith("3.1"):
-            return False
-        validate(doc)
-        return True
-    except Exception:  # noqa: BLE001
-        return False
+        validate(openapi_from_design(design))
+    except Exception as e:  # noqa: BLE001
+        errs.append(f"OpenAPI 3.1 inválido: {str(e).splitlines()[0][:200]}")
+    return errs
 
 
 def metrics_api_designer(out: dict, ctx: dict) -> dict:
@@ -63,7 +82,7 @@ def metrics_api_designer(out: dict, ctx: dict) -> dict:
     got = {i for e in eps for i in e.get("integraciones", [])}
     errs = {e["id"] for e in out.get("errores", [])}; secs = {s["id"] for s in out.get("esquemas_seguridad", [])}
     refs_ok = sum(1 for e in eps if e["seguridad"] in secs and set(e.get("errores", [])) <= errs)
-    return {"openapi_valid": openapi_ok(out.get("openapi_yaml", "")),
+    return {"openapi_valid": not openapi_errors(out),
             "int_coverage": (len(need & got) / len(need)) if need else 1.0,
             "refs_declared": (refs_ok / len(eps)) if eps else 0.0}
 
@@ -91,26 +110,51 @@ def metrics_test_cases(out: dict, ctx: dict) -> dict:
             "pytest_compiles": (sum(1 for c in cases if pytest_code_ok(c.get("codigo_pytest", ""))) / len(cases)) if cases else 0.0}
 
 
-def workflow_ok(text: str) -> bool:
+def workflow_errors(p: dict) -> list[str]:
+    """Valida el workflow renderizado: jobs únicos, needs a jobs existentes y sin ciclos, cada paso con run o uses."""
     import yaml
+    from .render import workflow_yaml
+    errs, ids = [], [j["id"] for j in p.get("jobs", [])]
+    if len(ids) != len(set(ids)):
+        errs.append(f"{p['id']}: ids de job repetidos")
+    for j in p.get("jobs", []):
+        for n in j.get("needs", []):
+            if n not in ids or n == j["id"]:
+                errs.append(f"{p['id']}/{j['id']}: needs '{n}' no es otro job del pipeline")
+        for s in j["steps"]:
+            if bool(s.get("run")) == bool(s.get("uses")):
+                errs.append(f"{p['id']}/{j['id']}: el paso '{s['nombre']}' debe tener run o uses (uno solo)")
+    deps = {j["id"]: set(j.get("needs", [])) for j in p.get("jobs", [])}
+    done = set()
+    while True:
+        ready = {k for k, v in deps.items() if k not in done and v <= done}
+        if not ready:
+            break
+        done |= ready
+    if len(done) < len(deps):
+        errs.append(f"{p['id']}: dependencias needs con ciclo")
     try:
-        doc = yaml.safe_load(text)
-    except Exception:  # noqa: BLE001
-        return False
-    if not isinstance(doc, dict):
-        return False
-    on = doc.get("on", doc.get(True))           # PyYAML lee la clave `on` como True
-    jobs = doc.get("jobs")
-    return bool(on) and isinstance(jobs, dict) and bool(jobs) and all(
-        isinstance(j, dict) and j.get("runs-on") and isinstance(j.get("steps"), list) and j["steps"] for j in jobs.values())
+        doc = yaml.safe_load(workflow_yaml(p))
+        assert doc.get("on", doc.get(True)) and doc["jobs"]
+    except Exception as e:  # noqa: BLE001
+        errs.append(f"{p['id']}: YAML no serializable ({e})")
+    return errs
+
+
+def workflow_ok(p: dict) -> bool:
+    return not workflow_errors(p)
+
+
+def _runs(p: dict) -> str:
+    return " ".join(s.get("run", "") for j in p.get("jobs", []) for s in j["steps"])
 
 
 def metrics_cicd(out: dict, ctx: dict) -> dict:
     pipes = out.get("pipelines", [])
     prod = [p for p in pipes if p["ambiente"] == "prod"]
-    return {"yaml_valid": (sum(1 for p in pipes if workflow_ok(p["yaml"])) / len(pipes)) if pipes else 0.0,
+    return {"yaml_valid": (sum(1 for p in pipes if workflow_ok(p)) / len(pipes)) if pipes else 0.0,
             "env_coverage": len({p["ambiente"] for p in pipes} & {"dev", "staging", "prod"}) / 3,
-            "test_stage": (sum(1 for p in pipes if "pytest" in p["yaml"]) / len(pipes)) if pipes else 0.0,
+            "test_stage": (sum(1 for p in pipes if "pytest" in _runs(p)) / len(pipes)) if pipes else 0.0,
             "prod_manual_gate": 1.0 if prod and all(any(g["etapa"] == "deploy" and g["tipo"] == "manual" for g in p["gates"]) for p in prod) else 0.0}
 
 

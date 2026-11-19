@@ -28,10 +28,31 @@ def test_arquitectura_entidad_sin_componente():
     assert not ok and any("ZonaEntrega" in h["detalle"] for h in v["hallazgos"])
 
 
-def test_openapi_invalido_rechazado():
-    o = F("api-designer-agent"); o["openapi_yaml"] = "openapi: 3.1.0\ninfo: {title: x}\npaths: 5\n" + " " * 40
+def test_parametro_de_ruta_no_declarado_rechazado():
+    o = F("api-designer-agent"); o["endpoints"][0]["parametros"] = []
     v, ok, _ = _rev("api-designer-agent", o)
-    assert not ok and any(h["regla"] == "F5.openapi_valid" for h in v["hallazgos"])
+    assert not ok and any(h["regla"] == "F5.openapi_valid" and "pedidoId" in h["detalle"] for h in v["hallazgos"])
+
+
+def test_openapi_renderizado_valido():
+    from openapi_spec_validator import validate
+    from core.render import openapi_from_design
+    validate(openapi_from_design(F("api-designer-agent")))
+
+
+def test_workflow_needs_inexistente_rechazado():
+    o = F("cicd-pipeline-agent"); o["pipelines"][0]["jobs"][1]["needs"] = ["build"]
+    v, ok, _ = _rev("cicd-pipeline-agent", o)
+    assert not ok and any("build" in h["detalle"] for h in v["hallazgos"])
+
+
+def test_nombres_normalizados():
+    assert verify.norm("Zona Entrega") == verify.norm("ZonaEntrega") and verify.norm("Campaña") == verify.norm("campana")
+
+
+def test_refinement_rounds_no_bloquea():
+    v, ok, f5 = governance.review(REG.agents["api-designer-agent"], F("api-designer-agent"), CTX, 2)
+    assert ok and v["veredicto"] == "aprobado" and not f5["refinement_rounds"]["ok"]
 
 
 def test_criterio_sin_caso_rechazado():

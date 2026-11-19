@@ -112,6 +112,12 @@ class Orchestrator:
         out_dir = self.root / "data/requerimientos" / ctx["req_id"] / "output"; out_dir.mkdir(parents=True, exist_ok=True)
         (out_dir / f"{name}.json").write_text(json.dumps(artefact, ensure_ascii=False, indent=1), encoding="utf-8")
         (out_dir / f"{name}.decision.json").write_text(json.dumps(meta, ensure_ascii=False, indent=1, default=str), encoding="utf-8")
+        from . import render                                  # formatos estándar derivados de forma determinista
+        if name == "api_design":
+            (out_dir / "api_design.openapi.yaml").write_text(render.openapi_yaml(artefact), encoding="utf-8")
+        if name == "cicd_pipeline":
+            for p in artefact.get("pipelines", []):
+                (out_dir / f"{p['id']}.{p['ambiente']}.workflow.yaml").write_text(render.workflow_yaml(p), encoding="utf-8")
         ctx[name] = artefact
 
     # ---------- DAG ----------

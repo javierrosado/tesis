@@ -35,5 +35,5 @@ if os.path.exists(tel):
     api.upload_file(path_or_fileobj=tel, path_in_repo=f"{dest}/telemetria.jsonl", repo_id=os.environ["RUNS_REPO"], repo_type="dataset")
 for d in sorted((ROOT / "data/requerimientos").glob("*/output")):
     if any(d.glob("*.json")):
-        api.upload_folder(folder_path=str(d), path_in_repo=f"{dest}/{d.parent.name}", repo_id=os.environ["RUNS_REPO"], repo_type="dataset", allow_patterns=["*.json"])
+        api.upload_folder(folder_path=str(d), path_in_repo=f"{dest}/{d.parent.name}", repo_id=os.environ["RUNS_REPO"], repo_type="dataset", allow_patterns=["*.json", "*.yaml"])
 srv.terminate(); print("exit:", r.returncode); sys.exit(r.returncode)

@@ -4,7 +4,38 @@
   {
    "id": "PIPE-001",
    "ambiente": "dev",
-   "yaml": "name: dev\non:\n  push:\n    branches: [main]\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - run: pip install -r requirements.txt && pytest -q\n  deploy:\n    needs: test\n    runs-on: ubuntu-latest\n    environment: dev\n    steps:\n      - run: echo desplegar a dev con ${{ secrets.DEPLOY_TOKEN }}\n",
+   "disparador": "push",
+   "jobs": [
+    {
+     "id": "test",
+     "runs_on": "ubuntu-latest",
+     "needs": [],
+     "steps": [
+      {
+       "nombre": "Checkout",
+       "uses": "actions/checkout@v4"
+      },
+      {
+       "nombre": "Pruebas",
+       "run": "pip install -r requirements.txt && pytest -q"
+      }
+     ]
+    },
+    {
+     "id": "deploy",
+     "runs_on": "ubuntu-latest",
+     "needs": [
+      "test"
+     ],
+     "environment": "dev",
+     "steps": [
+      {
+       "nombre": "Desplegar",
+       "run": "./deploy.sh dev"
+      }
+     ]
+    }
+   ],
    "gates": [
     {
      "id": "GATE-001",
@@ -23,7 +54,38 @@
   {
    "id": "PIPE-002",
    "ambiente": "staging",
-   "yaml": "name: staging\non:\n  push:\n    branches: [main]\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - run: pip install -r requirements.txt && pytest -q\n  deploy:\n    needs: test\n    runs-on: ubuntu-latest\n    environment: staging\n    steps:\n      - run: echo desplegar a staging con ${{ secrets.DEPLOY_TOKEN }}\n",
+   "disparador": "push",
+   "jobs": [
+    {
+     "id": "test",
+     "runs_on": "ubuntu-latest",
+     "needs": [],
+     "steps": [
+      {
+       "nombre": "Checkout",
+       "uses": "actions/checkout@v4"
+      },
+      {
+       "nombre": "Pruebas",
+       "run": "pip install -r requirements.txt && pytest -q"
+      }
+     ]
+    },
+    {
+     "id": "deploy",
+     "runs_on": "ubuntu-latest",
+     "needs": [
+      "test"
+     ],
+     "environment": "staging",
+     "steps": [
+      {
+       "nombre": "Desplegar",
+       "run": "./deploy.sh staging"
+      }
+     ]
+    }
+   ],
    "gates": [
     {
      "id": "GATE-003",
@@ -42,7 +104,38 @@
   {
    "id": "PIPE-003",
    "ambiente": "prod",
-   "yaml": "name: prod\non:\n  push:\n    branches: [main]\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - run: pip install -r requirements.txt && pytest -q\n  deploy:\n    needs: test\n    runs-on: ubuntu-latest\n    environment: prod\n    steps:\n      - run: echo desplegar a prod con ${{ secrets.DEPLOY_TOKEN }}\n",
+   "disparador": "workflow_dispatch",
+   "jobs": [
+    {
+     "id": "test",
+     "runs_on": "ubuntu-latest",
+     "needs": [],
+     "steps": [
+      {
+       "nombre": "Checkout",
+       "uses": "actions/checkout@v4"
+      },
+      {
+       "nombre": "Pruebas",
+       "run": "pip install -r requirements.txt && pytest -q"
+      }
+     ]
+    },
+    {
+     "id": "deploy",
+     "runs_on": "ubuntu-latest",
+     "needs": [
+      "test"
+     ],
+     "environment": "prod",
+     "steps": [
+      {
+       "nombre": "Desplegar",
+       "run": "./deploy.sh prod"
+      }
+     ]
+    }
+   ],
    "gates": [
     {
      "id": "GATE-005",

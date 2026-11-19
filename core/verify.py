@@ -48,7 +48,7 @@ def metrics_solution_architect(out: dict, ctx: dict) -> dict:
     ints = out.get("integraciones", [])
     return {"adr_options": (sum(1 for a in adrs if len(a.get("opciones", [])) >= 2 and a.get("consecuencias")) / len(adrs)) if adrs else 0.0,
             "entity_coverage": (len(ents & assigned) / len(ents)) if ents else 1.0,
-            "int_refs_valid": (sum(1 for i in ints if i["origen"] in comps and i["destino"] in comps) / len(ints)) if ints else 1.0}
+            "int_refs_valid": (sum(1 for i in ints if i["origen"] in comps and i["destino"] in comps and i["origen"] != i["destino"]) / len(ints)) if ints else 1.0}
 
 
 def openapi_errors(design: dict) -> list[str]:
@@ -64,6 +64,10 @@ def openapi_errors(design: dict) -> list[str]:
         for n in [ep.get("cuerpo")] + [r.get("esquema") for r in ep.get("respuestas", [])]:
             if n and n not in {s["nombre"] for s in design.get("esquemas", [])}:
                 errs.append(f"{ep['id']}: el esquema {n} no está declarado en esquemas")
+    for ep in design.get("endpoints", []):
+        for r in ep.get("respuestas", []):
+            if r["status"] == 204 and r.get("esquema"):
+                errs.append(f"{ep['id']}: la respuesta 204 no lleva cuerpo; quita el esquema {r['esquema']}")
     seen = {}
     for ep in design.get("endpoints", []):
         k = (ep["ruta"], ep["metodo"])
@@ -125,6 +129,12 @@ def metrics_test_cases(out: dict, ctx: dict) -> dict:
             "pytest_compiles": (sum(1 for c in cases if pytest_code_ok(c.get("codigo_pytest", ""))) / len(cases)) if cases else 0.0}
 
 
+# Acciones de GitHub verificadas (existen y se usan en la organización). Cualquier otra se rechaza.
+ALLOWED_ACTIONS = {"actions/checkout", "actions/setup-python", "actions/setup-node", "actions/setup-java", "actions/cache",
+                   "actions/upload-artifact", "actions/download-artifact", "docker/setup-buildx-action", "docker/login-action",
+                   "docker/build-push-action", "aquasecurity/trivy-action"}
+
+
 def workflow_errors(p: dict) -> list[str]:
     """Valida el workflow renderizado: jobs únicos, needs a jobs existentes y sin ciclos, cada paso con run o uses."""
     import yaml
@@ -136,7 +146,11 @@ def workflow_errors(p: dict) -> list[str]:
         for n in j.get("needs", []):
             if n not in ids or n == j["id"]:
                 errs.append(f"{p['id']}/{j['id']}: needs '{n}' no es otro job del pipeline")
+        if any("pytest" in (s.get("run") or "") for s in j["steps"]) and not any((s.get("uses") or "").startswith("actions/checkout@") for s in j["steps"]):
+            errs.append(f"{p['id']}/{j['id']}: el job que ejecuta pytest debe hacer checkout del código en sus propios pasos (cada job corre en una máquina nueva)")
         for s in j["steps"]:
+            if s.get("uses") and s["uses"].split("@")[0] not in ALLOWED_ACTIONS:
+                errs.append(f"{p['id']}/{j['id']}: la acción {s['uses']} no está en la lista verificada ({', '.join(sorted(ALLOWED_ACTIONS))})")
             if bool(s.get("run")) == bool(s.get("uses")):
                 errs.append(f"{p['id']}/{j['id']}: el paso '{s['nombre']}' debe tener run o uses (uno solo)")
     deps = {j["id"]: set(j.get("needs", [])) for j in p.get("jobs", [])}

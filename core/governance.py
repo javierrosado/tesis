@@ -44,7 +44,8 @@ def _f5_detail(agent_name: str, key: str, out: dict, ctx: dict, res: dict) -> tu
     if agent_name == "solution-architect-agent" and key == "int_refs_valid":
         comps = {c["id"] for c in out.get("componentes", [])}
         bad = [i["id"] for i in out.get("integraciones", []) if i["origen"] not in comps or i["destino"] not in comps]
-        return f"origen y destino deben ser ids COMP-xxx declarados. Integraciones inválidas: {', '.join(bad)}", "integraciones"
+        bad += [i["id"] for i in out.get("integraciones", []) if i["origen"] == i["destino"] and i["id"] not in bad]
+        return f"origen y destino deben ser ids COMP-xxx declarados y distintos entre sí. Integraciones inválidas: {', '.join(bad)}", "integraciones"
     if agent_name == "solution-architect-agent" and key == "adr_options":
         bad = [a["id"] for a in out.get("adrs", []) if len(a.get("opciones", [])) < 2 or not a.get("consecuencias")]
         return f"Todo ADR compara ≥2 opciones y lista consecuencias. ADRs incompletos: {', '.join(bad)}", "adrs"

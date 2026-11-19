@@ -10,7 +10,7 @@ from .model_port import ModelPort, ContractError
 from .registry import Registry
 from .telemetry import Telemetry
 from .tools.rag import KnowledgeRag
-from . import verify
+from . import verify, governance
 
 ARTEFACT_NAME = {"product-analyst-agent": "user_story_set", "domain-modeling-agent": "domain_model",
                  "ux-ui-copilot-agent": "ux_spec"}
@@ -48,15 +48,13 @@ class Orchestrator:
             qs += ["glosario pedido estado", "especificación pedidos"]
         return qs
 
-    # ---------- governance ----------
-    def _review(self, producer, artefact: dict, ctx: dict, round_: int) -> dict:
-        payload = {"artefacto": ARTEFACT_NAME[producer.name], "agente_evaluado": producer.name, "ronda": round_,
-                   "criterios_f5": producer.verification, "gate": producer.gate, "contenido": artefact}
-        knowledge, refs = self.rag.context_block(["política", "seguridad", "release"] + ctx["business_request"]["reglas_negocio"], k=3)
-        out, stats = self._port(self.gov).run(self.gov, ctx["req_id"], self._messages(self.gov, payload, knowledge), variant=f"{producer.name}-r{round_}")
+    # ---------- governance (determinista, F1.1) ----------
+    def _review(self, producer, artefact: dict, ctx: dict, round_: int) -> tuple[dict, bool, dict]:
+        verdict, ok_f5, f5 = governance.review(producer, artefact, ctx, round_)
+        verdict["artefacto"] = ARTEFACT_NAME[producer.name]
         self.tel.emit(event="governance_verdict", agent=self.gov.name, req_id=ctx["req_id"], target=producer.name, round=round_,
-                      verdict=out["veredicto"], findings=len(out["hallazgos"]), provider=stats["provider"], model_id=stats["model_id"])
-        return out
+                      verdict=verdict["veredicto"], findings=len(verdict["hallazgos"]), provider="deterministic", model_id=None)
+        return verdict, ok_f5, f5
 
     # ---------- gate humano (RACI) ----------
     def _gate(self, producer, verdict: dict, ctx: dict) -> dict:
@@ -85,15 +83,9 @@ class Orchestrator:
         feedback = None
         for round_ in range(max_rounds + 1):
             out, stats = self._port(agent).run(agent, req_id, self._messages(agent, payload, knowledge, feedback), variant=f"r{round_}")
-            verdict = self._review(agent, out, ctx, round_)
-            ok_f5, f5 = verify.evaluate(agent, out, ctx, {"refinement_rounds": round_})
+            verdict, ok_f5, f5 = self._review(agent, out, ctx, round_)
             self.tel.emit(event="f5_check", req_id=req_id, agent=agent_name, round=round_, ok=ok_f5, metrics=f5)
-            blocking = any(h["severidad"] == "bloqueante" for h in verdict["hallazgos"])
-            if not ok_f5:                                   # F5 se evalúa en código: manda sobre el veredicto del modelo
-                feedback = [{"severidad": "bloqueante", "regla": f"F5.{k}", "detalle": f"{v['rule']} (valor {v['value']})", "ubicacion": "<artefacto>"}
-                            for k, v in f5.items() if not v["ok"] and k != "refinement_rounds"] + verdict["hallazgos"]
-                if any(h["severidad"] == "bloqueante" for h in feedback):
-                    continue
+            blocking = any(h["severidad"] in ("bloqueante", "mayor") for h in verdict["hallazgos"])
             if verdict["veredicto"] == "aprobado" and not blocking:
                 gate = self._gate(agent, verdict, ctx) if agent.gate else {"decision": "approved"}
                 if gate["decision"] in ("approved", "pending"):

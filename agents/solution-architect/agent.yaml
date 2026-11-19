@@ -1,0 +1,27 @@
+name: solution-architect-agent
+domain: arquitectura
+phase: arquitectura
+version: "1.0"
+purpose: >
+  Transformar el modelo de dominio y las historias en una arquitectura de solución formal: ADRs,
+  componentes por bounded context, contratos de integración, patrones y requisitos de seguridad.
+prompt: prompt.md
+input_schema: null      # recibe {user_story_set, domain_model, ux_spec}; se construye en el orquestador
+output_schema: output.schema.json
+produces: solution_architecture
+trainable: true         # adaptador QLoRA del dominio Arquitectura
+requires: {json_mode: true, context_tokens: 32000, language: es, tools: [rag.search]}
+consumes_from: [domain-modeling-agent, ux-ui-copilot-agent]
+handoff_to: [api-designer-agent]
+reviewed_by: governance-agent
+logic:
+  - "Agrupar entidades en componentes por bounded context."
+  - "Documentar cada decisión en un ADR con opciones y consecuencias."
+  - "Formalizar integraciones entre componentes declarados."
+verification:
+  - {id: schema_valid, rule: "schema_valid == true"}
+  - {id: adr_options, rule: "adr_options == 1.0", description: "todo ADR con ≥2 opciones y ≥1 consecuencia"}
+  - {id: entity_coverage, rule: "entity_coverage == 1.0", description: "toda entidad del dominio asignada a un componente"}
+  - {id: int_refs_valid, rule: "int_refs_valid == 1.0", description: "toda integración une componentes declarados"}
+  - {id: refinement_rounds, rule: "refinement_rounds <= 1"}
+gate: {role: tech_lead, artefact: solution_architecture, sla_hours: 8, delegable: true}

@@ -1,0 +1,148 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "agents/api-designer/output.schema.json",
+ "title": "ApiDesign",
+ "description": "Salida de api-designer-agent (Tabla 16): especificación OpenAPI 3.1, endpoints trazados a integraciones, errores RFC 7807 y esquemas de seguridad.",
+ "type": "object",
+ "required": [
+  "req_id",
+  "openapi_yaml",
+  "endpoints",
+  "errores",
+  "esquemas_seguridad",
+  "provenance"
+ ],
+ "properties": {
+  "req_id": {
+   "type": "string"
+  },
+  "openapi_yaml": {
+   "type": "string",
+   "minLength": 50,
+   "description": "documento OpenAPI 3.1 completo en YAML"
+  },
+  "endpoints": {
+   "type": "array",
+   "items": {
+    "type": "object",
+    "required": [
+     "id",
+     "metodo",
+     "ruta",
+     "integraciones",
+     "seguridad",
+     "errores"
+    ],
+    "properties": {
+     "id": {
+      "type": "string",
+      "pattern": "^EP-[0-9]{3}$"
+     },
+     "metodo": {
+      "type": "string",
+      "enum": [
+       "GET",
+       "POST",
+       "PUT",
+       "PATCH",
+       "DELETE"
+      ]
+     },
+     "ruta": {
+      "type": "string",
+      "pattern": "^/"
+     },
+     "integraciones": {
+      "type": "array",
+      "items": {
+       "type": "string",
+       "pattern": "^INT-[0-9]{3}$"
+      }
+     },
+     "seguridad": {
+      "type": "string",
+      "pattern": "^SEC-SCHEME-[0-9]{3}$"
+     },
+     "errores": {
+      "type": "array",
+      "items": {
+       "type": "string",
+       "pattern": "^ERR-[0-9]{3}$"
+      }
+     }
+    },
+    "additionalProperties": false
+   },
+   "minItems": 1
+  },
+  "errores": {
+   "type": "array",
+   "items": {
+    "type": "object",
+    "required": [
+     "id",
+     "status",
+     "title",
+     "type"
+    ],
+    "properties": {
+     "id": {
+      "type": "string",
+      "pattern": "^ERR-[0-9]{3}$"
+     },
+     "status": {
+      "type": "integer",
+      "minimum": 400,
+      "maximum": 599
+     },
+     "title": {
+      "type": "string",
+      "minLength": 3
+     },
+     "type": {
+      "type": "string",
+      "minLength": 3
+     }
+    },
+    "additionalProperties": false
+   },
+   "minItems": 1
+  },
+  "esquemas_seguridad": {
+   "type": "array",
+   "items": {
+    "type": "object",
+    "required": [
+     "id",
+     "tipo",
+     "descripcion"
+    ],
+    "properties": {
+     "id": {
+      "type": "string",
+      "pattern": "^SEC-SCHEME-[0-9]{3}$"
+     },
+     "tipo": {
+      "type": "string",
+      "enum": [
+       "oauth2",
+       "jwt_bearer",
+       "api_key",
+       "mtls"
+      ]
+     },
+     "descripcion": {
+      "type": "string",
+      "minLength": 5
+     }
+    },
+    "additionalProperties": false
+   },
+   "minItems": 1
+  },
+  "provenance": {
+   "$ref": "../../contracts/provenance.schema.json"
+  }
+ },
+ "additionalProperties": false
+}

@@ -1,0 +1,27 @@
+name: api-designer-agent
+domain: ingenieria
+phase: ingenieria
+version: "1.0"
+purpose: >
+  Transformar la arquitectura de solución en especificaciones OpenAPI 3.1 completas, con catálogo de
+  errores RFC 7807, versionado, paginación y esquemas de seguridad.
+prompt: prompt.md
+input_schema: null      # recibe {solution_architecture, domain_model}
+output_schema: output.schema.json
+produces: api_design
+trainable: true         # adaptador QLoRA del dominio Ingeniería
+requires: {json_mode: true, context_tokens: 32000, language: es, tools: [rag.search]}
+consumes_from: [solution-architect-agent]
+handoff_to: [test-case-generator-agent, cicd-pipeline-agent]
+reviewed_by: governance-agent
+logic:
+  - "Mapear cada integración comando/consulta a uno o más endpoints."
+  - "Redactar el documento OpenAPI 3.1 y validarlo."
+  - "Asignar esquema de seguridad y errores RFC 7807 a cada endpoint."
+verification:
+  - {id: schema_valid, rule: "schema_valid == true"}
+  - {id: openapi_valid, rule: "openapi_valid == true", description: "openapi_yaml valida como OpenAPI 3.1"}
+  - {id: int_coverage, rule: "int_coverage == 1.0", description: "toda integración comando/consulta implementada por ≥1 endpoint"}
+  - {id: refs_declared, rule: "refs_declared == 1.0", description: "errores y esquemas de seguridad citados por los endpoints están declarados"}
+  - {id: refinement_rounds, rule: "refinement_rounds <= 1"}
+gate: {role: api_architect, artefact: api_design, sla_hours: 8, delegable: true}

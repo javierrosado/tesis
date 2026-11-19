@@ -1,0 +1,27 @@
+name: test-case-generator-agent
+domain: calidad
+phase: calidad
+version: "1.0"
+purpose: >
+  Convertir los criterios Given/When/Then en casos de prueba unitarios, de integración y end-to-end
+  ejecutables, con trazabilidad caso → criterio → historia.
+prompt: prompt.md
+input_schema: null      # recibe {user_story_set, api_design}
+output_schema: output.schema.json
+produces: test_cases
+trainable: true         # adaptador QLoRA del dominio Calidad
+requires: {json_mode: true, context_tokens: 32000, language: es, tools: [rag.search]}
+consumes_from: [product-analyst-agent, api-designer-agent]
+handoff_to: [cicd-pipeline-agent]
+reviewed_by: governance-agent
+logic:
+  - "Recorrer cada criterio de cada historia y generar ≥1 caso."
+  - "Asociar los casos de contrato a endpoints del diseño de API."
+  - "Escribir la función pytest de cada caso."
+verification:
+  - {id: schema_valid, rule: "schema_valid == true"}
+  - {id: criteria_coverage, rule: "criteria_coverage == 1.0", description: "todo criterio Given/When/Then con ≥1 caso"}
+  - {id: int_endpoints_valid, rule: "int_endpoints_valid == 1.0", description: "todo caso de integración apunta a un endpoint existente"}
+  - {id: pytest_compiles, rule: "pytest_compiles >= 0.9", description: "proporción de casos cuyo código pytest compila y define test_"}
+  - {id: refinement_rounds, rule: "refinement_rounds <= 1"}
+gate: {role: qa_lead, artefact: test_cases, sla_hours: 8, delegable: true}

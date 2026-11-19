@@ -1,0 +1,127 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "agents/cicd-pipeline/output.schema.json",
+ "title": "CicdPipeline",
+ "description": "Salida de cicd-pipeline-agent (Tabla 18): pipelines declarativos por ambiente con puertas de calidad y criterios de promoción.",
+ "type": "object",
+ "required": [
+  "req_id",
+  "pipelines",
+  "promocion",
+  "provenance"
+ ],
+ "properties": {
+  "req_id": {
+   "type": "string"
+  },
+  "pipelines": {
+   "type": "array",
+   "items": {
+    "type": "object",
+    "required": [
+     "id",
+     "ambiente",
+     "yaml",
+     "gates"
+    ],
+    "properties": {
+     "id": {
+      "type": "string",
+      "pattern": "^PIPE-[0-9]{3}$"
+     },
+     "ambiente": {
+      "type": "string",
+      "enum": [
+       "dev",
+       "staging",
+       "prod"
+      ]
+     },
+     "yaml": {
+      "type": "string",
+      "minLength": 40,
+      "description": "workflow de GitHub Actions en YAML"
+     },
+     "gates": {
+      "type": "array",
+      "items": {
+       "type": "object",
+       "required": [
+        "id",
+        "etapa",
+        "tipo",
+        "criterio"
+       ],
+       "properties": {
+        "id": {
+         "type": "string",
+         "pattern": "^GATE-[0-9]{3}$"
+        },
+        "etapa": {
+         "type": "string",
+         "enum": [
+          "build",
+          "test",
+          "security",
+          "deploy"
+         ]
+        },
+        "tipo": {
+         "type": "string",
+         "enum": [
+          "automatica",
+          "manual"
+         ]
+        },
+        "criterio": {
+         "type": "string",
+         "minLength": 5
+        }
+       },
+       "additionalProperties": false
+      },
+      "minItems": 1
+     }
+    },
+    "additionalProperties": false
+   },
+   "minItems": 1
+  },
+  "promocion": {
+   "type": "array",
+   "items": {
+    "type": "object",
+    "required": [
+     "desde",
+     "hacia",
+     "criterio"
+    ],
+    "properties": {
+     "desde": {
+      "type": "string",
+      "enum": [
+       "dev",
+       "staging"
+      ]
+     },
+     "hacia": {
+      "type": "string",
+      "enum": [
+       "staging",
+       "prod"
+      ]
+     },
+     "criterio": {
+      "type": "string",
+      "minLength": 5
+     }
+    },
+    "additionalProperties": false
+   }
+  },
+  "provenance": {
+   "$ref": "../../contracts/provenance.schema.json"
+  }
+ },
+ "additionalProperties": false
+}

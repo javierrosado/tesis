@@ -1,0 +1,89 @@
+{
+ "req_id": "SIM-P05-R001",
+ "pipelines": [
+  {
+   "id": "PIPE-001",
+   "ambiente": "dev",
+   "yaml": "name: dev\non:\n  push:\n    branches: [main]\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - run: pip install -r requirements.txt && pytest -q\n  deploy:\n    needs: test\n    runs-on: ubuntu-latest\n    environment: dev\n    steps:\n      - run: echo desplegar a dev con ${{ secrets.DEPLOY_TOKEN }}\n",
+   "gates": [
+    {
+     "id": "GATE-001",
+     "etapa": "test",
+     "tipo": "automatica",
+     "criterio": "pytest sin fallos y cobertura ≥ 80 %"
+    },
+    {
+     "id": "GATE-002",
+     "etapa": "deploy",
+     "tipo": "automatica",
+     "criterio": "smoke test exitoso"
+    }
+   ]
+  },
+  {
+   "id": "PIPE-002",
+   "ambiente": "staging",
+   "yaml": "name: staging\non:\n  push:\n    branches: [main]\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - run: pip install -r requirements.txt && pytest -q\n  deploy:\n    needs: test\n    runs-on: ubuntu-latest\n    environment: staging\n    steps:\n      - run: echo desplegar a staging con ${{ secrets.DEPLOY_TOKEN }}\n",
+   "gates": [
+    {
+     "id": "GATE-003",
+     "etapa": "test",
+     "tipo": "automatica",
+     "criterio": "pytest sin fallos y cobertura ≥ 80 %"
+    },
+    {
+     "id": "GATE-004",
+     "etapa": "deploy",
+     "tipo": "automatica",
+     "criterio": "smoke test exitoso"
+    }
+   ]
+  },
+  {
+   "id": "PIPE-003",
+   "ambiente": "prod",
+   "yaml": "name: prod\non:\n  push:\n    branches: [main]\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - run: pip install -r requirements.txt && pytest -q\n  deploy:\n    needs: test\n    runs-on: ubuntu-latest\n    environment: prod\n    steps:\n      - run: echo desplegar a prod con ${{ secrets.DEPLOY_TOKEN }}\n",
+   "gates": [
+    {
+     "id": "GATE-005",
+     "etapa": "test",
+     "tipo": "automatica",
+     "criterio": "pytest sin fallos y cobertura ≥ 80 %"
+    },
+    {
+     "id": "GATE-006",
+     "etapa": "deploy",
+     "tipo": "manual",
+     "criterio": "aprobación del Release Manager en día de release permitido"
+    }
+   ]
+  }
+ ],
+ "promocion": [
+  {
+   "desde": "dev",
+   "hacia": "staging",
+   "criterio": "pipeline dev en verde"
+  },
+  {
+   "desde": "staging",
+   "hacia": "prod",
+   "criterio": "smoke test en staging y ventana de release vigente"
+  }
+ ],
+ "provenance": {
+  "contract_version": "1.0",
+  "req_id": "SIM-P05-R001",
+  "agent": "cicd-pipeline",
+  "phase": "devops",
+  "inputs": [
+   "solution_architecture",
+   "api_design",
+   "test_cases"
+  ],
+  "knowledge_refs": [
+   "politica_release"
+  ],
+  "assumptions": []
+ }
+}

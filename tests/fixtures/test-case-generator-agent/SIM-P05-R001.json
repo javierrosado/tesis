@@ -1,0 +1,61 @@
+{
+ "req_id": "SIM-P05-R001",
+ "casos": [
+  {
+   "id": "TC-INT-001",
+   "tipo": "integracion",
+   "historia": "US-01",
+   "criterio": 1,
+   "preparacion": "pedido de prueba en el estado indicado",
+   "accion": "se ejecuta la consulta del estado",
+   "resultado_esperado": "el estado devuelto coincide con el esperado",
+   "codigo_pytest": "def test_estado_en_preparacion():\n    estado = 'en preparación'\n    assert estado == 'en preparación'\n",
+   "endpoint": "EP-001"
+  },
+  {
+   "id": "TC-UNIT-001",
+   "tipo": "unit",
+   "historia": "US-01",
+   "criterio": 2,
+   "preparacion": "pedido de prueba en el estado indicado",
+   "accion": "se ejecuta la consulta del estado",
+   "resultado_esperado": "el estado devuelto coincide con el esperado",
+   "codigo_pytest": "def test_estado_no_retrocede():\n    orden = ['aprobado', 'en preparación', 'despachado']\n    assert orden.index('despachado') > orden.index('en preparación')\n"
+  },
+  {
+   "id": "TC-UNIT-002",
+   "tipo": "unit",
+   "historia": "US-02",
+   "criterio": 1,
+   "preparacion": "pedido de prueba en el estado indicado",
+   "accion": "se ejecuta la consulta del estado",
+   "resultado_esperado": "el estado devuelto coincide con el esperado",
+   "codigo_pytest": "def test_fecha_estimada_desde_despacho():\n    dias_transito = 3\n    assert dias_transito > 0\n"
+  },
+  {
+   "id": "TC-E2E-001",
+   "tipo": "e2e",
+   "historia": "US-02",
+   "criterio": 2,
+   "preparacion": "pedido de prueba en el estado indicado",
+   "accion": "se ejecuta la consulta del estado",
+   "resultado_esperado": "el estado devuelto coincide con el esperado",
+   "codigo_pytest": "def test_detalle_muestra_fecha_estimada():\n    pantalla = {'fecha_estimada': '2026-11-25'}\n    assert pantalla['fecha_estimada']\n"
+  }
+ ],
+ "provenance": {
+  "contract_version": "1.0",
+  "req_id": "SIM-P05-R001",
+  "agent": "test-case-generator",
+  "phase": "calidad",
+  "inputs": [
+   "user_story_set",
+   "api_design"
+  ],
+  "knowledge_refs": [
+   "BR-010",
+   "BR-011"
+  ],
+  "assumptions": []
+ }
+}

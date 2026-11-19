@@ -36,6 +36,44 @@ def _f5_detail(agent_name: str, key: str, out: dict, ctx: dict, res: dict) -> tu
     if agent_name == "product-analyst-agent" and key == "gwt_ratio":
         bad = [h.get("id") for h in out.get("historias", []) if not any(all(len(c.get(k, "")) >= 5 for k in ("given", "when", "then")) for c in h.get("criterios", []))]
         return f"Cada historia necesita al menos un criterio Given/When/Then completo. Sin criterio válido: {', '.join(map(str, bad))}", "historias[].criterios"
+    if agent_name == "solution-architect-agent" and key == "entity_coverage":
+        ents = [e["nombre"] for e in ctx.get("domain_model", {}).get("entidades", [])]
+        got = {e for c in out.get("componentes", []) for e in c.get("entidades", [])}
+        return f"Toda entidad del modelo de dominio debe estar en componentes[].entidades con su nombre exacto. Faltan: {', '.join(e for e in ents if e not in got)}", "componentes[].entidades"
+    if agent_name == "solution-architect-agent" and key == "int_refs_valid":
+        comps = {c["id"] for c in out.get("componentes", [])}
+        bad = [i["id"] for i in out.get("integraciones", []) if i["origen"] not in comps or i["destino"] not in comps]
+        return f"origen y destino deben ser ids COMP-xxx declarados. Integraciones inválidas: {', '.join(bad)}", "integraciones"
+    if agent_name == "solution-architect-agent" and key == "adr_options":
+        bad = [a["id"] for a in out.get("adrs", []) if len(a.get("opciones", [])) < 2 or not a.get("consecuencias")]
+        return f"Todo ADR compara ≥2 opciones y lista consecuencias. ADRs incompletos: {', '.join(bad)}", "adrs"
+    if agent_name == "api-designer-agent" and key == "openapi_valid":
+        return "openapi_yaml no valida como OpenAPI 3.1: incluye openapi: 3.1.0, info (title, version) y paths con responses por operación", "openapi_yaml"
+    if agent_name == "api-designer-agent" and key == "int_coverage":
+        need = [i["id"] for i in ctx.get("solution_architecture", {}).get("integraciones", []) if i.get("tipo") in ("comando", "consulta")]
+        got = {i for e in out.get("endpoints", []) for i in e.get("integraciones", [])}
+        return f"Toda integración comando/consulta necesita un endpoint. Sin endpoint: {', '.join(i for i in need if i not in got)}", "endpoints[].integraciones"
+    if agent_name == "api-designer-agent" and key == "refs_declared":
+        return "Cada endpoint debe citar un SEC-SCHEME-xxx de esquemas_seguridad y errores ERR-xxx de errores", "endpoints"
+    if agent_name == "test-case-generator-agent" and key == "criteria_coverage":
+        crit = sorted(verify._criteria(ctx)); cov = {(c["historia"], c["criterio"]) for c in out.get("casos", [])}
+        return f"Todo criterio necesita ≥1 caso (historia, posición). Sin cubrir: {', '.join(f'{h}#{n}' for h, n in crit if (h, n) not in cov)}", "casos[].criterio"
+    if agent_name == "test-case-generator-agent" and key == "int_endpoints_valid":
+        eps = {e["id"] for e in ctx.get("api_design", {}).get("endpoints", [])}
+        return f"Los casos de integración deben citar un endpoint existente ({', '.join(sorted(eps))})", "casos[].endpoint"
+    if agent_name == "test-case-generator-agent" and key == "pytest_compiles":
+        bad = [c["id"] for c in out.get("casos", []) if not verify.pytest_code_ok(c.get("codigo_pytest", ""))]
+        return f"codigo_pytest debe ser Python válido con una función def test_. Casos con error: {', '.join(bad)}", "casos[].codigo_pytest"
+    if agent_name == "cicd-pipeline-agent" and key == "yaml_valid":
+        bad = [p["id"] for p in out.get("pipelines", []) if not verify.workflow_ok(p["yaml"])]
+        return f"yaml debe ser un workflow de GitHub Actions (on, jobs; cada job con runs-on y steps). Inválidos: {', '.join(bad)}", "pipelines[].yaml"
+    if agent_name == "cicd-pipeline-agent" and key == "env_coverage":
+        have = {p["ambiente"] for p in out.get("pipelines", [])}
+        return f"Se requiere un pipeline por ambiente. Faltan: {', '.join(a for a in ('dev', 'staging', 'prod') if a not in have)}", "pipelines[].ambiente"
+    if agent_name == "cicd-pipeline-agent" and key == "test_stage":
+        return "Todo pipeline debe ejecutar pytest antes de desplegar", "pipelines[].yaml"
+    if agent_name == "cicd-pipeline-agent" and key == "prod_manual_gate":
+        return "El pipeline de prod necesita una puerta de etapa deploy y tipo manual", "pipelines[prod].gates"
     return f"{res['rule']} (valor actual {res['value']})", "<artefacto>"
 
 

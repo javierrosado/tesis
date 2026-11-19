@@ -1,0 +1,83 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "agents/test-case-generator/output.schema.json",
+ "title": "TestCases",
+ "description": "Salida de test-case-generator-agent (Tabla 17): casos unitarios, de integración y E2E trazados a cada criterio Given/When/Then.",
+ "type": "object",
+ "required": [
+  "req_id",
+  "casos",
+  "provenance"
+ ],
+ "properties": {
+  "req_id": {
+   "type": "string"
+  },
+  "casos": {
+   "type": "array",
+   "items": {
+    "type": "object",
+    "required": [
+     "id",
+     "tipo",
+     "historia",
+     "criterio",
+     "preparacion",
+     "accion",
+     "resultado_esperado",
+     "codigo_pytest"
+    ],
+    "properties": {
+     "id": {
+      "type": "string",
+      "pattern": "^TC-(UNIT|INT|E2E)-[0-9]{3}$"
+     },
+     "tipo": {
+      "type": "string",
+      "enum": [
+       "unit",
+       "integracion",
+       "e2e"
+      ]
+     },
+     "historia": {
+      "type": "string",
+      "pattern": "^US-[0-9]{2}$"
+     },
+     "criterio": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "posición (1..n) del criterio dentro de la historia"
+     },
+     "endpoint": {
+      "type": "string",
+      "pattern": "^EP-[0-9]{3}$"
+     },
+     "preparacion": {
+      "type": "string",
+      "minLength": 5
+     },
+     "accion": {
+      "type": "string",
+      "minLength": 5
+     },
+     "resultado_esperado": {
+      "type": "string",
+      "minLength": 5
+     },
+     "codigo_pytest": {
+      "type": "string",
+      "minLength": 20,
+      "description": "función pytest ejecutable (def test_...)"
+     }
+    },
+    "additionalProperties": false
+   },
+   "minItems": 1
+  },
+  "provenance": {
+   "$ref": "../../contracts/provenance.schema.json"
+  }
+ },
+ "additionalProperties": false
+}

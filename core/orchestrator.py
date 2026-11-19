@@ -13,7 +13,15 @@ from .tools.rag import KnowledgeRag
 from . import verify, governance
 
 ARTEFACT_NAME = {"product-analyst-agent": "user_story_set", "domain-modeling-agent": "domain_model",
-                 "ux-ui-copilot-agent": "ux_spec"}
+                 "ux-ui-copilot-agent": "ux_spec", "solution-architect-agent": "solution_architecture",
+                 "api-designer-agent": "api_design", "test-case-generator-agent": "test_cases",
+                 "cicd-pipeline-agent": "cicd_pipeline"}
+RAG_QUERIES = {"ux-ui-copilot-agent": ["convenciones de interfaz componentes", "accesibilidad"],
+               "domain-modeling-agent": ["glosario pedido estado", "especificación pedidos"],
+               "solution-architect-agent": ["decisión de arquitectura ADR", "patrones integración eventos", "política de seguridad datos"],
+               "api-designer-agent": ["convenciones de API versionado paginación", "errores RFC 7807 correlation", "openapi pedidos"],
+               "test-case-generator-agent": ["convenciones de código pruebas", "criterios de aceptación"],
+               "cicd-pipeline-agent": ["política de release ventanas despliegue", "política de seguridad secretos pipeline"]}
 
 
 class Orchestrator:
@@ -42,11 +50,7 @@ class Orchestrator:
     def _queries_for(self, agent, ctx: dict) -> list[str]:
         br = ctx["business_request"]
         qs = [br["titulo"], br["necesidad"][:200]] + br["reglas_negocio"]
-        if agent.name == "ux-ui-copilot-agent":
-            qs += ["convenciones de interfaz componentes", "accesibilidad"]
-        if agent.name == "domain-modeling-agent":
-            qs += ["glosario pedido estado", "especificación pedidos"]
-        return qs
+        return qs + RAG_QUERIES.get(agent.name, [])
 
     # ---------- governance (determinista, F1.1) ----------
     def _review(self, producer, artefact: dict, ctx: dict, round_: int) -> tuple[dict, bool, dict]:
@@ -108,9 +112,19 @@ class Orchestrator:
         ctx[name] = artefact
 
     # ---------- DAG ----------
+    def _payload(self, node: dict, ctx: dict, stage_art: dict):
+        ins = node.get("inputs", [])
+        if ins == ["intake"]:
+            return ctx["business_request"]
+        if len(ins) == 1:
+            return ctx[stage_art[ins[0]]]
+        return {stage_art[i]: ctx[stage_art[i]] for i in ins}
+
     def run(self, req_id: str) -> dict:
         req_dir = self.root / "data/requerimientos" / req_id
         ctx = {"req_id": req_id}
+        nodes = [n for st in self.reg.dag["stages"] for n in (st.get("parallel") or [st])]
+        stage_art = {n["id"]: ARTEFACT_NAME[n["agent"]] for n in nodes if n.get("agent")}
         self.tel.emit(event="pipeline_started", req_id=req_id, dag=self.reg.dag["pipeline"])
         for stage in self.reg.dag["stages"]:
             if stage.get("action") == "load_business_request":
@@ -119,14 +133,14 @@ class Orchestrator:
                 ctx["business_request"] = br
                 self.tel.emit(event="intake", req_id=req_id, puntos=br["puntos_historia"], reglas=br["reglas_negocio"])
             elif stage.get("action") == "emit_handoff":
-                self.tel.emit(event="handoff", req_id=req_id, frm="discovery", to="arquitectura", mode="auto",
-                              artefacts=[k for k in ARTEFACT_NAME.values() if k in ctx])
+                self.tel.emit(event="handoff", req_id=req_id, frm=stage.get("from", "discovery"), to=stage.get("to", "arquitectura"), mode="auto",
+                              artefacts=[stage_art[i] for i in stage.get("inputs", []) if i in stage_art and stage_art[i] in ctx])
             elif "parallel" in stage:
                 with ThreadPoolExecutor(max_workers=len(stage["parallel"])) as ex:
-                    futs = {ex.submit(self.run_agent, n["agent"], ctx[ARTEFACT_NAME["product-analyst-agent"]], ctx): n for n in stage["parallel"]}
+                    futs = [ex.submit(self.run_agent, n["agent"], self._payload(n, ctx, stage_art), ctx) for n in stage["parallel"]]
                     for f in futs:
                         f.result()
             else:
-                self.run_agent(stage["agent"], ctx["business_request"], ctx)
+                self.run_agent(stage["agent"], self._payload(stage, ctx, stage_art), ctx)
         self.tel.emit(event="pipeline_completed", req_id=req_id, artefacts=[k for k in ARTEFACT_NAME.values() if k in ctx])
         return ctx

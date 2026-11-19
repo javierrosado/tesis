@@ -1,0 +1,88 @@
+{
+ "req_id": "SIM-P05-R001",
+ "adrs": [
+  {
+   "id": "ADR-101",
+   "titulo": "Consulta de estado de pedido vía caché sincronizada por eventos",
+   "contexto": "Las consultoras consultan el estado del pedido con alta frecuencia en cierre de campaña; el sistema logístico no soporta esa carga.",
+   "opciones": [
+    "consulta directa al sistema logístico",
+    "proyección de lectura actualizada por eventos de dominio"
+   ],
+   "decision": "proyección de lectura actualizada por eventos PedidoDespachado y PedidoEntregado",
+   "consecuencias": [
+    "latencia de actualización de hasta 5 minutos aceptada por US-01",
+    "el estado nunca retrocede porque la proyección solo aplica transiciones válidas"
+   ]
+  }
+ ],
+ "componentes": [
+  {
+   "id": "COMP-001",
+   "nombre": "SeguimientoPedidos",
+   "bounded_context": "Pedidos",
+   "responsabilidad": "exponer el estado y la fecha estimada de entrega de los pedidos",
+   "entidades": [
+    "Pedido"
+   ]
+  },
+  {
+   "id": "COMP-002",
+   "nombre": "LogisticaEntrega",
+   "bounded_context": "Logistica",
+   "responsabilidad": "publicar eventos de despacho y entrega y calcular días de tránsito por zona",
+   "entidades": [
+    "ZonaEntrega"
+   ]
+  }
+ ],
+ "integraciones": [
+  {
+   "id": "INT-001",
+   "origen": "COMP-002",
+   "destino": "COMP-001",
+   "tipo": "evento",
+   "contrato": "PedidoDespachado v1 / PedidoEntregado v1"
+  },
+  {
+   "id": "INT-002",
+   "origen": "COMP-001",
+   "destino": "COMP-002",
+   "tipo": "consulta",
+   "contrato": "GET dias de tránsito por zona"
+  }
+ ],
+ "patrones": [
+  {
+   "id": "PAT-001",
+   "patron": "CQRS",
+   "justificacion": "separar la proyección de lectura del sistema transaccional logístico",
+   "aplica_a": [
+    "COMP-001"
+   ]
+  }
+ ],
+ "requisitos_seguridad": [
+  {
+   "id": "SEC-001",
+   "descripcion": "la consultora solo puede ver sus propios pedidos (autorización por consultoraId del token)"
+  }
+ ],
+ "provenance": {
+  "contract_version": "1.0",
+  "req_id": "SIM-P05-R001",
+  "agent": "solution-architect",
+  "phase": "arquitectura",
+  "inputs": [
+   "user_story_set",
+   "domain_model",
+   "ux_spec"
+  ],
+  "knowledge_refs": [
+   "ADR-004",
+   "BR-010",
+   "BR-011"
+  ],
+  "assumptions": []
+ }
+}

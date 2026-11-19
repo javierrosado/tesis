@@ -13,7 +13,7 @@ roles:
       approve_if_only_minor: true
       delay_hours_sampler: {dist: lognormal, median: 6, p90: 20}
   tech_lead:
-    artefacts: [domain_model]
+    artefacts: [domain_model, solution_architecture]
     sla_hours: 8
     delegable: true
     delegate_to: senior_dev
@@ -21,6 +21,33 @@ roles:
       approve_if_no_findings: true
       approve_if_only_minor: true
       delay_hours_sampler: {dist: lognormal, median: 5, p90: 16}
+  api_architect:
+    artefacts: [api_design]
+    sla_hours: 8
+    delegable: true
+    delegate_to: tech_lead
+    auto_policy:
+      approve_if_no_findings: true
+      approve_if_only_minor: true
+      delay_hours_sampler: {dist: lognormal, median: 6, p90: 18}
+  qa_lead:
+    artefacts: [test_cases]
+    sla_hours: 8
+    delegable: true
+    delegate_to: quality_engineer
+    auto_policy:
+      approve_if_no_findings: true
+      approve_if_only_minor: true
+      delay_hours_sampler: {dist: lognormal, median: 5, p90: 16}
+  devops_engineer:
+    artefacts: [cicd_pipeline]
+    sla_hours: 8
+    delegable: true
+    delegate_to: platform_engineer
+    auto_policy:
+      approve_if_no_findings: true
+      approve_if_only_minor: true
+      delay_hours_sampler: {dist: lognormal, median: 4, p90: 12}
 escalation:
   after_rounds: 2
   to: product_owner

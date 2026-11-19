@@ -1,0 +1,54 @@
+"""Criterios F5 de los 4 agentes entrenables nuevos: casos negativos que governance debe rechazar."""
+import copy, json, sys
+from pathlib import Path
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+from core.registry import Registry   # noqa: E402
+from core import governance, verify  # noqa: E402
+
+REG = Registry(ROOT)
+F = lambda a: json.loads((ROOT / f"tests/fixtures/{a}/SIM-P05-R001.json").read_text(encoding="utf-8"))
+CTX = {"req_id": "SIM-P05-R001", "user_story_set": F("product-analyst-agent"), "domain_model": F("domain-modeling-agent"),
+       "solution_architecture": F("solution-architect-agent"), "api_design": F("api-designer-agent"), "test_cases": F("test-case-generator-agent")}
+
+
+def _rev(agent, out):
+    return governance.review(REG.agents[agent], out, CTX, 0)
+
+
+def test_fixtures_aprobadas():
+    for a in ("solution-architect-agent", "api-designer-agent", "test-case-generator-agent", "cicd-pipeline-agent"):
+        v, ok, f5 = _rev(a, F(a))
+        assert ok and v["veredicto"] == "aprobado", (a, v["hallazgos"])
+
+
+def test_arquitectura_entidad_sin_componente():
+    o = F("solution-architect-agent"); o["componentes"][1]["entidades"] = []
+    v, ok, _ = _rev("solution-architect-agent", o)
+    assert not ok and any("ZonaEntrega" in h["detalle"] for h in v["hallazgos"])
+
+
+def test_openapi_invalido_rechazado():
+    o = F("api-designer-agent"); o["openapi_yaml"] = "openapi: 3.1.0\ninfo: {title: x}\npaths: 5\n" + " " * 40
+    v, ok, _ = _rev("api-designer-agent", o)
+    assert not ok and any(h["regla"] == "F5.openapi_valid" for h in v["hallazgos"])
+
+
+def test_criterio_sin_caso_rechazado():
+    o = F("test-case-generator-agent"); o["casos"] = [c for c in o["casos"] if c["historia"] != "US-02"]
+    v, ok, _ = _rev("test-case-generator-agent", o)
+    assert not ok and any("US-02#1" in h["detalle"] for h in v["hallazgos"])
+
+
+def test_pytest_no_compila():
+    assert not verify.pytest_code_ok("def test_x(:\n  pass")
+    assert verify.pytest_code_ok("def test_x():\n    assert True\n")
+
+
+def test_prod_sin_puerta_manual_rechazado():
+    o = F("cicd-pipeline-agent")
+    for p in o["pipelines"]:
+        for g in p["gates"]:
+            g["tipo"] = "automatica"
+    v, ok, _ = _rev("cicd-pipeline-agent", o)
+    assert not ok and any(h["regla"] == "F5.prod_manual_gate" for h in v["hallazgos"])

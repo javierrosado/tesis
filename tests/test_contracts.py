@@ -14,14 +14,14 @@ REG = Registry(ROOT)
 
 
 def test_all_agents_load():
-    assert {"product-analyst-agent", "domain-modeling-agent", "ux-ui-copilot-agent", "governance-agent"} <= set(REG.agents)
+    assert {"product-analyst-agent", "domain-modeling-agent", "ux-ui-copilot-agent", "governance-agent", "solution-architect-agent", "api-designer-agent", "test-case-generator-agent", "cicd-pipeline-agent"} <= set(REG.agents)
     for a in REG.agents.values():
         assert a.prompt.strip(), a.name
         jsonschema.Draft202012Validator.check_schema(a.output_schema)
 
 
 def test_schemas_have_provenance():
-    for n in ("product-analyst-agent", "domain-modeling-agent", "ux-ui-copilot-agent"):
+    for n in ("product-analyst-agent", "domain-modeling-agent", "ux-ui-copilot-agent", "solution-architect-agent", "api-designer-agent", "test-case-generator-agent", "cicd-pipeline-agent"):
         props = REG.agents[n].output_schema["properties"]
         assert "provenance" in props and "knowledge_refs" in props["provenance"]["properties"], n
 
@@ -50,7 +50,7 @@ def test_dag_runs_with_mock(tmp_path, monkeypatch):
     assert sum(1 for e in ev if e["event"] == "governance_verdict" and e["verdict"] == "rechazado") == 1   # ronda 0 rechazada
     assert all("provider" in e and "model_id" in e for e in ev if e["event"] == "agent_completed")   # trazabilidad del proveedor
     gates = [e for e in ev if e["event"] == "human_gate"]
-    assert {g["artefact"] for g in gates} == {"user_story_set", "domain_model", "ux_spec"}
+    assert {g["artefact"] for g in gates} == {"user_story_set", "domain_model", "ux_spec", "solution_architecture", "api_design", "test_cases", "cicd_pipeline"}
 
 
 def test_capability_check_blocks_unfit_provider():

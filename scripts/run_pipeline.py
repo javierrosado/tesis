@@ -10,7 +10,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
-from core.orchestrator import Orchestrator          # noqa: E402
+from core.orchestrator import Orchestrator, ARTEFACT_NAME   # noqa: E402
 from core.telemetry import Telemetry                 # noqa: E402
 
 ap = argparse.ArgumentParser()
@@ -32,7 +32,7 @@ summary = []
 for r in reqs:
     try:
         ctx = orch.run(r)
-        summary.append({"req_id": r, "ok": True, "artefacts": [k for k in ("user_story_set", "domain_model", "ux_spec") if k in ctx]})
+        summary.append({"req_id": r, "ok": True, "artefacts": [k for k in ARTEFACT_NAME.values() if k in ctx]})
     except Exception as e:  # noqa: BLE001
         summary.append({"req_id": r, "ok": False, "error": str(e)[:200]})
         tel.emit(event="pipeline_failed", req_id=r, error=str(e)[:300])

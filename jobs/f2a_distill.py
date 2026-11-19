@@ -20,7 +20,7 @@ TRAINABLE = ["product-analyst-agent", "solution-architect-agent", "api-designer-
 
 url = f"https://github.com/javierrosado/tesis/archive/refs/heads/{BRANCH}.tar.gz"
 tarfile.open(fileobj=io.BytesIO(urllib.request.urlopen(url).read())).extractall("/tmp", filter="data")
-ROOT = Path(f"/tmp/tesis-{BRANCH}"); os.chdir(ROOT); sys.path.insert(0, str(ROOT))
+ROOT = Path(f"/tmp/tesis-{BRANCH.replace('/', '-')}"); os.chdir(ROOT); sys.path.insert(0, str(ROOT))
 
 # 1) servidor vLLM con el maestro
 srv = subprocess.Popen([sys.executable, "-m", "vllm.entrypoints.openai.api_server", "--model", TEACHER, "--port", "8000",

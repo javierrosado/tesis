@@ -26,7 +26,7 @@ providers:
     adapter: hf_local
     model: Qwen/Qwen3-8B
     quantization: int4                 # bitsandbytes nf4; cabe en 16 GB
-    max_new_tokens: 2048
+    max_new_tokens: 4096
     temperature: 0.2
     json_grammar: true                 # decodificación restringida por el JSON Schema (outlines)
     chat_template_kwargs: {enable_thinking: false}   # Qwen3: sin modo razonamiento en salidas JSON

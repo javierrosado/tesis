@@ -4,15 +4,21 @@ API keys comerciales: la URL apunta a localhost en el job de HF. Salida estructu
 import copy, json, sys, time, urllib.error, urllib.request
 from .base import ModelResponse
 
-_SOFT = ("pattern", "format", "minLength", "maxLength", "minItems", "maxItems", "minimum", "maximum")
-
-
-def _relax(schema):
-    """Copia del schema sin restricciones léxicas que algunos motores de gramática no soportan.
+def _grammar_safe(schema, drop_patterns: bool = False):
+    """Adapta el schema al motor de gramática de vLLM sin perder estructura:
+    - quita minLength/maxLength donde hay pattern (el motor no compone regex con longitud: "Unable to determine if regex is empty");
+    - con drop_patterns=True (reintento ante 400) quita además pattern y format.
     El contrato completo lo sigue validando el puerto (jsonschema) después de la generación."""
     def walk(n):
         if isinstance(n, dict):
-            return {k: walk(v) for k, v in n.items() if k not in _SOFT}
+            out = {}
+            for k, v in n.items():
+                if k in ("minLength", "maxLength") and "pattern" in n:
+                    continue
+                if drop_patterns and k in ("pattern", "format"):
+                    continue
+                out[k] = walk(v)
+            return out
         if isinstance(n, list):
             return [walk(v) for v in n]
         return n
@@ -44,7 +50,7 @@ class OpenAICompatAdapter:
         if self.chat_kwargs:
             body["chat_template_kwargs"] = self.chat_kwargs
         if schema:
-            body["response_format"] = {"type": "json_schema", "json_schema": {"name": schema.get("title", "salida"), "schema": schema}}
+            body["response_format"] = {"type": "json_schema", "json_schema": {"name": schema.get("title", "salida"), "schema": _grammar_safe(schema)}}
         t0 = time.time()
         try:
             r = self._post(body)
@@ -53,7 +59,7 @@ class OpenAICompatAdapter:
             print(f"[openai_compat] HTTP {e.code}: {detail}", file=sys.stderr, flush=True)
             if e.code != 400 or not schema:
                 raise
-            body["response_format"]["json_schema"]["schema"] = _relax(schema)   # reintento con gramática relajada
+            body["response_format"]["json_schema"]["schema"] = _grammar_safe(schema, drop_patterns=True)   # reintento sin regex
             r = self._post(body)
         u = r.get("usage", {})
         return ModelResponse(text=r["choices"][0]["message"]["content"], model_id=self.model, provider=self.name,

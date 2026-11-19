@@ -89,6 +89,7 @@ class Orchestrator:
         feedback = None
         for round_ in range(max_rounds + 1):
             out, stats = self._port(agent).run(agent, req_id, self._messages(agent, payload, knowledge, feedback), variant=f"r{round_}")
+            self._stamp_provenance(agent, out, req_id)
             verdict, ok_f5, f5 = self._review(agent, out, ctx, round_)
             if verdict["veredicto"] == "rechazado":
                 self.rejections.append({"agent": agent_name, "req_id": req_id, "round": round_, "hallazgos": verdict["hallazgos"], "output": out})
@@ -110,6 +111,17 @@ class Orchestrator:
                 feedback = verdict["hallazgos"]
         self.tel.emit(event="escalation", req_id=req_id, agent=agent_name, round=max_rounds, to=self.reg.gates["escalation"]["to"], reason="max_rounds")
         raise ContractError(f"{agent_name}/{req_id}: rechazado por gobernanza {max_rounds + 1} veces")
+
+    @staticmethod
+    def _stamp_provenance(agent, out: dict, req_id: str) -> None:
+        """Los hechos de origen (requerimiento, agente, fase, versión de contrato) los conoce el orquestador:
+        se sellan en código para que la trazabilidad (H5) no dependa del modelo. El modelo aporta inputs y knowledge_refs."""
+        prov = out.get("provenance")
+        if isinstance(prov, dict):
+            prov.update({"contract_version": "1.0", "req_id": req_id, "agent": agent.name.removesuffix("-agent"),
+                         "phase": agent.spec.get("phase", prov.get("phase"))})
+        if "req_id" in out:
+            out["req_id"] = req_id
 
     def _save(self, ctx, name, artefact, meta):
         out_dir = self.root / "data/requerimientos" / ctx["req_id"] / "output"; out_dir.mkdir(parents=True, exist_ok=True)

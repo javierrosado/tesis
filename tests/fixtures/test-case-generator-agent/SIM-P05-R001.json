@@ -9,7 +9,11 @@
    "preparacion": "pedido de prueba en el estado indicado",
    "accion": "se ejecuta la consulta del estado",
    "resultado_esperado": "el estado devuelto coincide con el esperado",
-   "codigo_pytest": "def test_estado_en_preparacion():\n    estado = 'en preparación'\n    assert estado == 'en preparación'\n",
+   "codigo_pytest": [
+    "def test_estado_en_preparacion():",
+    "    estado = 'en preparación'",
+    "    assert estado == 'en preparación'"
+   ],
    "endpoint": "EP-001"
   },
   {
@@ -20,7 +24,11 @@
    "preparacion": "pedido de prueba en el estado indicado",
    "accion": "se ejecuta la consulta del estado",
    "resultado_esperado": "el estado devuelto coincide con el esperado",
-   "codigo_pytest": "def test_estado_no_retrocede():\n    orden = ['aprobado', 'en preparación', 'despachado']\n    assert orden.index('despachado') > orden.index('en preparación')\n"
+   "codigo_pytest": [
+    "def test_estado_no_retrocede():",
+    "    orden = ['aprobado', 'en preparación', 'despachado']",
+    "    assert orden.index('despachado') > orden.index('en preparación')"
+   ]
   },
   {
    "id": "TC-UNIT-002",
@@ -30,7 +38,11 @@
    "preparacion": "pedido de prueba en el estado indicado",
    "accion": "se ejecuta la consulta del estado",
    "resultado_esperado": "el estado devuelto coincide con el esperado",
-   "codigo_pytest": "def test_fecha_estimada_desde_despacho():\n    dias_transito = 3\n    assert dias_transito > 0\n"
+   "codigo_pytest": [
+    "def test_fecha_estimada_desde_despacho():",
+    "    dias_transito = 3",
+    "    assert dias_transito > 0"
+   ]
   },
   {
    "id": "TC-E2E-001",
@@ -40,7 +52,11 @@
    "preparacion": "pedido de prueba en el estado indicado",
    "accion": "se ejecuta la consulta del estado",
    "resultado_esperado": "el estado devuelto coincide con el esperado",
-   "codigo_pytest": "def test_detalle_muestra_fecha_estimada():\n    pantalla = {'fecha_estimada': '2026-11-25'}\n    assert pantalla['fecha_estimada']\n"
+   "codigo_pytest": [
+    "def test_detalle_muestra_fecha_estimada():",
+    "    pantalla = {'fecha_estimada': '2026-11-25'}",
+    "    assert pantalla['fecha_estimada']"
+   ]
   }
  ],
  "provenance": {

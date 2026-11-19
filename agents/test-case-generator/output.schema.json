@@ -66,9 +66,14 @@
       "minLength": 5
      },
      "codigo_pytest": {
-      "type": "string",
-      "minLength": 20,
-      "description": "función pytest ejecutable (def test_...)"
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 40,
+      "items": {
+       "type": "string",
+       "maxLength": 200
+      },
+      "description": "función pytest, una línea de código por elemento (con su sangría); el sistema las une con saltos de línea"
      }
     },
     "additionalProperties": false

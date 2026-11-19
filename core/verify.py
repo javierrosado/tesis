@@ -100,8 +100,14 @@ def _strip_code_fences(code: str) -> str:
     return t
 
 
-def pytest_code_ok(code: str) -> bool:
+def code_text(code) -> str:
+    """codigo_pytest llega como lista de líneas (contrato v1.1) o como texto (compatibilidad)."""
+    return "\n".join(code) if isinstance(code, list) else str(code or "")
+
+
+def pytest_code_ok(code) -> bool:
     import ast, textwrap
+    code = code_text(code)
     try:
         tree = ast.parse(textwrap.dedent(_strip_code_fences(code)))
     except SyntaxError:

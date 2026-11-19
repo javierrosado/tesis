@@ -82,3 +82,15 @@ def test_pytest_con_fences_y_clase():
 def test_lenguaje_ubicuo_por_contencion():
     m = verify.metrics_domain_modeling({"entidades": [{"nombre": "Pedido"}], "lenguaje_ubicuo": [{"termino": "Pedido de campaña"}], "eventos": [], "transiciones": []}, {})
     assert m["ubiquitous_coverage"] == 1.0
+
+
+def test_codigo_como_lineas():
+    assert verify.pytest_code_ok(["def test_a():", "    x = 1", "    assert x == 1"])
+    assert not verify.pytest_code_ok(["def test_a(): x = 1 assert x == 1"])
+
+
+def test_orquestador_sella_procedencia():
+    from core.orchestrator import Orchestrator
+    out = {"req_id": "X", "provenance": {"contract_version": "1.0", "req_id": "X", "agent": "product-analyst", "phase": "discovery", "inputs": [], "knowledge_refs": ["BR-010"]}}
+    Orchestrator._stamp_provenance(REG.agents["domain-modeling-agent"], out, "SIM-P05-R001")
+    assert out["provenance"]["agent"] == "domain-modeling" and out["req_id"] == "SIM-P05-R001"

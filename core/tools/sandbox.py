@@ -62,6 +62,15 @@ def ddl_check(data_model: dict) -> dict:
 
 
 # ---------------------------------------------------------------- servicio FastAPI
+def signatures(api_design: dict) -> dict[str, str]:
+    """Firma que el sistema genera para cada handler: el backend solo puede usar estos nombres de parámetros."""
+    sig = {}
+    for ep in api_design.get("endpoints", []):
+        ps = [_ident(p["nombre"]) for p in ep.get("parametros", [])] + (["body"] if ep.get("cuerpo") else [])
+        sig[ep["id"]] = f"def _{ep['id'].replace('-', '_').lower()}({', '.join(ps)}):"
+    return sig
+
+
 def render_app(api_design: dict, data_model: dict, backend: dict) -> dict[str, str]:
     handlers = {h["endpoint"]: h["lineas"] for h in backend.get("handlers", [])}
     seeds = {s["tabla"]: s["filas"] for s in backend.get("semillas", [])}

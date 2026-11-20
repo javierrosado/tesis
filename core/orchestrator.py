@@ -249,8 +249,16 @@ class Orchestrator:
                 p = out_dir / "servicio" / rel; p.parent.mkdir(parents=True, exist_ok=True); p.write_text(txt, encoding="utf-8")
 
     # ---------- entradas especiales (información que el orquestador calcula con herramientas) ----------
+    def _backend_payload(self, ctx: dict) -> dict:
+        from .tools import sandbox
+        return {"api_design": ctx["api_design"], "data_model": ctx["data_model"],
+                "firmas_handlers": sandbox.signatures(ctx["api_design"]),
+                "tablas_db": {t["nombre"]: [c["nombre"] for c in t["columnas"]] for t in ctx["data_model"].get("tablas", [])}}
+
     def _special_payload(self, agent_name: str, ctx: dict):
         from .tools import sandbox
+        if agent_name == "backend-developer-agent":
+            return self._backend_payload(ctx)
         if agent_name == "qa-automation-agent":
             return {"test_cases": ctx["test_cases"], "api_design": ctx["api_design"],
                     "servicio": {"rutas": [{"endpoint": e["id"], "metodo": e["metodo"], "ruta": e["ruta"]} for e in ctx["api_design"]["endpoints"]],
@@ -291,7 +299,7 @@ class Orchestrator:
             pre_fb = [{"severidad": "mayor", "regla": "gate_humano", "detalle": f"Tech Lead devolvió el código: {h['motivo']}", "ubicacion": "handlers"}]
         if pre_fb:
             self.tel.emit(event="remediation", req_id=req_id, ciclo=0, motivo="gate_humano")
-            self.run_agent("backend-developer-agent", {"api_design": ctx["api_design"], "data_model": ctx["data_model"]}, ctx, feedback0=pre_fb, force=True)
+            self.run_agent("backend-developer-agent", self._backend_payload(ctx), ctx, feedback0=pre_fb, force=True)
         for cycle in range(max_cycles + 1):
             self.run_agent("qa-automation-agent", self._special_payload("qa-automation-agent", ctx), ctx)
             review = self.run_agent("code-review-agent", self._special_payload("code-review-agent", ctx), ctx, force=True, defer_gate=True)
@@ -308,7 +316,7 @@ class Orchestrator:
                  [{"severidad": "mayor", "regla": h["regla"], "detalle": h["descripcion"] + " → " + h["recomendacion"], "ubicacion": f'{h["archivo"]}:{h["linea"]}'}
                   for h in review["hallazgos"] if h["severidad"] == "critico"]
             self.tel.emit(event="remediation", req_id=req_id, ciclo=cycle + 1, fallos=q["pruebas_fallidas"], criticos=q["criticos"])
-            self.run_agent("backend-developer-agent", {"api_design": ctx["api_design"], "data_model": ctx["data_model"]}, ctx, feedback0=fb, force=True)
+            self.run_agent("backend-developer-agent", self._backend_payload(ctx), ctx, feedback0=fb, force=True)
         out, meta = self._load(req_id, "code_review")
         gate = self._gate(self.reg.agents["code-review-agent"], meta["verdict"], ctx, out)
         meta["gate"] = gate; self._save(ctx, "code_review", out, meta)

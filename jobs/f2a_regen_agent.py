@@ -40,7 +40,7 @@ from refilter_dataset import rebuild, align_prompt     # noqa: E402
 reg = Registry(ROOT); ag = reg.agents[AGENT]
 adapter = OpenAICompatAdapter({"model": TEACHER, "max_new_tokens": 6144, "temperature": 0.3, "chat_template_kwargs": {"enable_thinking": False}})
 src = Path(snapshot_download(SRC, repo_type="dataset", allow_patterns=[f"{AGENT}/*.jsonl"]))
-items = [(sp, json.loads(l)) for sp in ("train", "val", "test") for l in (src / AGENT / f"{sp}.jsonl").read_text(encoding="utf-8").splitlines()]
+items = [(sp, json.loads(l)) for sp in ("test", "val", "train") for l in (src / AGENT / f"{sp}.jsonl").read_text(encoding="utf-8").splitlines()]
 out, lock, stats = {"train": [], "val": [], "test": []}, threading.Lock(), {"ok": 0, "fail": 0, "rondas": [0, 0, 0]}
 # reanudación: conserva lo ya regenerado en DST y no lo repite
 try:

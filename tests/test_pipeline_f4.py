@@ -79,3 +79,20 @@ def test_deploy_agrega_checkout_determinista():
     job2 = {"steps": [{"uses": "actions/checkout@v4"}, {"run": "./deploy.sh staging"}]}
     assert not verify.needs_checkout(job2)
     assert not verify.needs_checkout({"steps": [{"run": "echo listo"}]})
+
+
+def test_modelo_diferido_pausa_sin_sustituir(tmp_path, monkeypatch):
+    import os, shutil
+    from pathlib import Path
+    from core.orchestrator import Orchestrator, ModelDeferred
+    from core.telemetry import Telemetry
+    root = Path(__file__).resolve().parents[1]
+    monkeypatch.setenv("PIPELINE_PROVIDER", "vllm_local"); monkeypatch.setenv("GATES_MODE", "auto")
+    o = Orchestrator(root, Telemetry(tmp_path / "t.jsonl", run_id="t"), today="2026-11-24")
+    assert o.reg.provider_for("backend-developer-agent")[0] == "vllm_teacher"
+    monkeypatch.setenv("PROVIDERS_DOWN", "vllm_teacher")
+    try:
+        o._port(o.reg.agents["backend-developer-agent"]); assert False
+    except ModelDeferred:
+        pass
+    o._port(o.reg.agents["product-analyst-agent"])   # los demás agentes no se afectan

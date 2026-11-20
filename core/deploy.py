@@ -39,6 +39,11 @@ def package(ctx: dict) -> dict[str, str]:
     if stg:
         wf = render.workflow_from_pipeline(stg)
         wf["on"] = {"push": {"branches": [f"req/{ctx['req_id']}"]}}     # adaptación determinista: dispara con la rama del requerimiento
+        adapt = []
+        for jid, job in (wf.get("jobs") or {}).items():                   # adaptación determinista: checkout en jobs que usan el repo
+            if verify.needs_checkout(job):
+                job["steps"] = [{"name": "checkout", "uses": "actions/checkout@v4"}] + list(job["steps"]); adapt.append(jid)
+        ctx["_adaptaciones_deploy"] = {"trigger": f"req/{ctx['req_id']}", "checkout_añadido": adapt}
         import yaml
         files[".github/workflows/staging.yml"] = yaml.safe_dump(wf, sort_keys=False, allow_unicode=True)
     return files
@@ -94,7 +99,8 @@ def run(orch, ctx: dict) -> None:
     reached = bool(deploy_jobs) and all(j["conclusion"] not in ("skipped", None) for j in deploy_jobs)
     failed = reached and any(j["conclusion"] != "success" for j in deploy_jobs)
     ev = {"event": "deployment", "req_id": req_id, "release": rel["id"], "version": rel["version"], "sha": sha, "run": res.get("url"),
-          "conclusion": res.get("conclusion"), "alcanzo_deploy": reached, "fallido": failed, "jobs": res.get("jobs")}
+          "conclusion": res.get("conclusion"), "alcanzo_deploy": reached, "fallido": failed, "jobs": res.get("jobs"),
+          "adaptaciones": ctx.get("_adaptaciones_deploy", {})}
     orch.tel.emit(**{k: v for k, v in ev.items() if k != "event"}, event="deployment")
     (out / "deployment.json").write_text(json.dumps({**ev, "ts": _now()}, ensure_ascii=False, indent=1), encoding="utf-8")
     if reached and not failed:

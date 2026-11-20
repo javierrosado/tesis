@@ -70,3 +70,12 @@ def test_flujo_manual_reanudable(tmp_path, monkeypatch):
     ev = Telemetry(tmp_path / "ev.jsonl").read()
     assert sum(1 for e in ev if e["event"] == "pipeline_paused") == 5
     assert any(e["event"] == "human_gate" and e.get("by") == "politica_riesgo_bajo" for e in ev)
+
+
+def test_deploy_agrega_checkout_determinista():
+    from core import verify
+    job = {"steps": [{"name": "deploy", "run": "./deploy.sh staging"}]}
+    assert verify.needs_checkout(job)
+    job2 = {"steps": [{"uses": "actions/checkout@v4"}, {"run": "./deploy.sh staging"}]}
+    assert not verify.needs_checkout(job2)
+    assert not verify.needs_checkout({"steps": [{"run": "echo listo"}]})

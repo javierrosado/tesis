@@ -14,14 +14,14 @@ REG = Registry(ROOT)
 
 
 def test_all_agents_load():
-    assert {"product-analyst-agent", "domain-modeling-agent", "ux-ui-copilot-agent", "governance-agent", "solution-architect-agent", "api-designer-agent", "test-case-generator-agent", "cicd-pipeline-agent"} <= set(REG.agents)
+    assert len(REG.agents) == 14   # 13 funcionales + governance (knowledge-rag y skill-orchestrator son herramienta y orquestador)
     for a in REG.agents.values():
         assert a.prompt.strip(), a.name
         jsonschema.Draft202012Validator.check_schema(a.output_schema)
 
 
 def test_schemas_have_provenance():
-    for n in ("product-analyst-agent", "domain-modeling-agent", "ux-ui-copilot-agent", "solution-architect-agent", "api-designer-agent", "test-case-generator-agent", "cicd-pipeline-agent"):
+    for n in [a for a in REG.agents if a != "governance-agent"]:
         props = REG.agents[n].output_schema["properties"]
         assert "provenance" in props and "knowledge_refs" in props["provenance"]["properties"], n
 
@@ -42,7 +42,10 @@ def test_intake_matches_business_request_contract():
 def test_dag_runs_with_mock(tmp_path, monkeypatch):
     monkeypatch.setenv("PIPELINE_PROVIDER", "mock")
     tel = Telemetry(tmp_path / "ev.jsonl")
-    ctx = Orchestrator(ROOT, tel, seed=1).run("SIM-P05-R001")
+    import shutil
+    shutil.rmtree(ROOT / "data/requerimientos/SIM-P05-R001/output", ignore_errors=True)
+    orch = Orchestrator(ROOT, tel, seed=1, today="2026-11-24"); orch.reg.gates["mode"] = "auto"
+    ctx = orch.run("SIM-P05-R001")
     assert {"user_story_set", "domain_model", "ux_spec"} <= set(ctx)
     ev = tel.read()
     kinds = [e["event"] for e in ev]
@@ -50,7 +53,9 @@ def test_dag_runs_with_mock(tmp_path, monkeypatch):
     assert sum(1 for e in ev if e["event"] == "governance_verdict" and e["verdict"] == "rechazado") == 1   # ronda 0 rechazada
     assert all("provider" in e and "model_id" in e for e in ev if e["event"] == "agent_completed")   # trazabilidad del proveedor
     gates = [e for e in ev if e["event"] == "human_gate"]
-    assert {g["artefact"] for g in gates} == {"user_story_set", "domain_model", "ux_spec", "solution_architecture", "api_design", "test_cases", "cicd_pipeline"}
+    from core.orchestrator import ARTEFACT_NAME
+    assert {g["artefact"] for g in gates} == set(ARTEFACT_NAME.values())
+    assert ctx["_estado"] == "validado_sin_despliegue"
 
 
 def test_capability_check_blocks_unfit_provider():

@@ -1,0 +1,106 @@
+{
+ "req_id": "SIM-P05-R001",
+ "tablas": [
+  {
+   "id": "TBL-001",
+   "nombre": "zona_entrega",
+   "entidad": "ZonaEntrega",
+   "columnas": [
+    {
+     "nombre": "codigo",
+     "tipo": "TEXT",
+     "nulo": false,
+     "pk": true,
+     "pii": false,
+     "enmascarado": false
+    },
+    {
+     "nombre": "pais",
+     "tipo": "TEXT",
+     "nulo": false,
+     "pk": false,
+     "pii": false,
+     "enmascarado": false
+    },
+    {
+     "nombre": "dias_transito",
+     "tipo": "INTEGER",
+     "nulo": false,
+     "pk": false,
+     "pii": false,
+     "enmascarado": false
+    }
+   ],
+   "fks": []
+  },
+  {
+   "id": "TBL-002",
+   "nombre": "pedido",
+   "entidad": "Pedido",
+   "columnas": [
+    {
+     "nombre": "pedido_id",
+     "tipo": "TEXT",
+     "nulo": false,
+     "pk": true,
+     "pii": false,
+     "enmascarado": false
+    },
+    {
+     "nombre": "consultora_id",
+     "tipo": "TEXT",
+     "nulo": false,
+     "pk": false,
+     "pii": false,
+     "enmascarado": false
+    },
+    {
+     "nombre": "estado",
+     "tipo": "TEXT",
+     "nulo": false,
+     "pk": false,
+     "pii": false,
+     "enmascarado": false
+    },
+    {
+     "nombre": "fecha_estimada_entrega",
+     "tipo": "DATE",
+     "nulo": true,
+     "pk": false,
+     "pii": false,
+     "enmascarado": false
+    },
+    {
+     "nombre": "zona_codigo",
+     "tipo": "TEXT",
+     "nulo": false,
+     "pk": false,
+     "pii": false,
+     "enmascarado": false
+    }
+   ],
+   "fks": [
+    {
+     "columna": "zona_codigo",
+     "tabla_ref": "zona_entrega",
+     "columna_ref": "codigo"
+    }
+   ]
+  }
+ ],
+ "provenance": {
+  "contract_version": "1.0",
+  "req_id": "SIM-P05-R001",
+  "agent": "data-model",
+  "phase": "ingenieria",
+  "inputs": [
+   "domain_model",
+   "api_design",
+   "solution_architecture"
+  ],
+  "knowledge_refs": [
+   "nomenclatura_bd"
+  ],
+  "assumptions": []
+ }
+}

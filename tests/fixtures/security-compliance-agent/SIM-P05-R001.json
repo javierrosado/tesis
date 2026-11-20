@@ -1,0 +1,46 @@
+{
+ "req_id": "SIM-P05-R001",
+ "controles": [
+  {
+   "id": "CTRL-001",
+   "owasp": "A01",
+   "descripcion": "autorización por consultoraId del token en cada consulta de pedido",
+   "requisitos": [
+    "SEC-001"
+   ],
+   "aplica_a": [
+    "COMP-001"
+   ]
+  },
+  {
+   "id": "CTRL-002",
+   "owasp": "A09",
+   "descripcion": "registro de accesos a la consulta de estado con correlation_id",
+   "requisitos": [],
+   "aplica_a": [
+    "COMP-001"
+   ]
+  }
+ ],
+ "gates": [
+  {
+   "id": "GATE-101",
+   "etapa": "security",
+   "criterio": "escaneo de dependencias sin vulnerabilidades críticas"
+  }
+ ],
+ "hallazgos": [],
+ "provenance": {
+  "contract_version": "1.0",
+  "req_id": "SIM-P05-R001",
+  "agent": "security-compliance",
+  "phase": "arquitectura",
+  "inputs": [
+   "solution_architecture"
+  ],
+  "knowledge_refs": [
+   "politica_seguridad"
+  ],
+  "assumptions": []
+ }
+}

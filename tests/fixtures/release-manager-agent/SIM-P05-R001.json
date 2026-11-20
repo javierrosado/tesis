@@ -1,0 +1,48 @@
+{
+ "req_id": "SIM-P05-R001",
+ "release": {
+  "id": "RELEASE-001",
+  "version": "1.1.0",
+  "checklist": [
+   {
+    "criterio": "pruebas automatizadas en verde",
+    "cumple": true,
+    "evidencia": "3/3 pruebas aprobadas"
+   },
+   {
+    "criterio": "sin hallazgos críticos abiertos",
+    "cumple": true,
+    "evidencia": "code-review aprobado sin críticos"
+   },
+   {
+    "criterio": "puertas de seguridad definidas",
+    "cumple": true,
+    "evidencia": "GATE-101 escaneo de dependencias"
+   }
+  ],
+  "decision": "go",
+  "ventana": "2026-11-24",
+  "rollback": {
+   "estrategia": "redeploy-anterior",
+   "pasos": [
+    "redesplegar la versión 1.0.0 desde el último tag",
+    "verificar smoke test de staging"
+   ]
+  }
+ },
+ "provenance": {
+  "contract_version": "1.0",
+  "req_id": "SIM-P05-R001",
+  "agent": "release-manager",
+  "phase": "devops",
+  "inputs": [
+   "cicd_pipeline",
+   "code_review",
+   "qa_suite"
+  ],
+  "knowledge_refs": [
+   "politica_release"
+  ],
+  "assumptions": []
+ }
+}

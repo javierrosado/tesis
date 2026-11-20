@@ -1,0 +1,125 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "agents/data-model/output.schema.json",
+ "title": "DataModel",
+ "description": "Salida de data-model-agent (Tabla 16): modelo físico por entidad; el DDL (up/down) lo genera core/render.py y se ejecuta en SQLite en F5.",
+ "type": "object",
+ "required": [
+  "req_id",
+  "tablas",
+  "provenance"
+ ],
+ "properties": {
+  "req_id": {
+   "type": "string"
+  },
+  "tablas": {
+   "type": "array",
+   "items": {
+    "type": "object",
+    "required": [
+     "id",
+     "nombre",
+     "entidad",
+     "columnas",
+     "fks"
+    ],
+    "properties": {
+     "id": {
+      "type": "string",
+      "pattern": "^TBL-[0-9]{3}$"
+     },
+     "nombre": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]{0,40}$"
+     },
+     "entidad": {
+      "type": "string",
+      "minLength": 2,
+      "maxLength": 60
+     },
+     "columnas": {
+      "type": "array",
+      "items": {
+       "type": "object",
+       "required": [
+        "nombre",
+        "tipo",
+        "nulo",
+        "pk",
+        "pii",
+        "enmascarado"
+       ],
+       "properties": {
+        "nombre": {
+         "type": "string",
+         "pattern": "^[a-z][a-z0-9_]{0,40}$"
+        },
+        "tipo": {
+         "type": "string",
+         "enum": [
+          "TEXT",
+          "INTEGER",
+          "REAL",
+          "BOOLEAN",
+          "DATE",
+          "TIMESTAMP"
+         ]
+        },
+        "nulo": {
+         "type": "boolean"
+        },
+        "pk": {
+         "type": "boolean"
+        },
+        "pii": {
+         "type": "boolean"
+        },
+        "enmascarado": {
+         "type": "boolean"
+        }
+       },
+       "additionalProperties": false
+      },
+      "minItems": 1,
+      "maxItems": 20
+     },
+     "fks": {
+      "type": "array",
+      "items": {
+       "type": "object",
+       "required": [
+        "columna",
+        "tabla_ref",
+        "columna_ref"
+       ],
+       "properties": {
+        "columna": {
+         "type": "string",
+         "pattern": "^[a-z][a-z0-9_]{0,40}$"
+        },
+        "tabla_ref": {
+         "type": "string",
+         "pattern": "^[a-z][a-z0-9_]{0,40}$"
+        },
+        "columna_ref": {
+         "type": "string",
+         "pattern": "^[a-z][a-z0-9_]{0,40}$"
+        }
+       },
+       "additionalProperties": false
+      },
+      "maxItems": 6
+     }
+    },
+    "additionalProperties": false
+   },
+   "minItems": 1,
+   "maxItems": 10
+  },
+  "provenance": {
+   "$ref": "../../contracts/provenance.schema.json"
+  }
+ },
+ "additionalProperties": false
+}

@@ -1,53 +1,133 @@
-# Matriz RACI operativa (Tabla 13 de la tesis), solo la parte que necesita el orquestador.
-# mode: "auto" simula al humano con una política (para corridas batch); "manual" detiene y espera.
-version: "1.0"
-mode: auto
+# Matriz RACI operativa (Tabla 13). mode: manual = piloto real (los gates de riesgo alto esperan la decisión humana,
+# registrada en output/aprobaciones/<artefacto>.json con timestamp real); mode: auto = simulación (solo pruebas).
+# riesgo: alto → aprobación humana; bajo → aprobación automática si governance aprueba (Recomendación 4 de la tesis);
+# pii → alto solo si el modelo de datos contiene columnas con datos personales.
+version: '2.0'
+mode: manual
 roles:
   product_owner:
-    artefacts: [user_story_set, ux_spec]
+    artefacts:
+    - user_story_set
+    - ux_spec
     sla_hours: 8
     delegable: true
     delegate_to: business_analyst
-    auto_policy:                     # usado solo en mode: auto
+    auto_policy:
       approve_if_no_findings: true
       approve_if_only_minor: true
-      delay_hours_sampler: {dist: lognormal, median: 6, p90: 20}
+      delay_hours_sampler:
+        dist: lognormal
+        median: 6
+        p90: 20
   tech_lead:
-    artefacts: [domain_model, solution_architecture]
+    artefacts:
+    - domain_model
+    - solution_architecture
+    - backend_code
+    - code_review
     sla_hours: 8
     delegable: true
     delegate_to: senior_dev
     auto_policy:
       approve_if_no_findings: true
       approve_if_only_minor: true
-      delay_hours_sampler: {dist: lognormal, median: 5, p90: 16}
+      delay_hours_sampler:
+        dist: lognormal
+        median: 5
+        p90: 16
   api_architect:
-    artefacts: [api_design]
+    artefacts:
+    - api_design
     sla_hours: 8
     delegable: true
     delegate_to: tech_lead
     auto_policy:
       approve_if_no_findings: true
       approve_if_only_minor: true
-      delay_hours_sampler: {dist: lognormal, median: 6, p90: 18}
+      delay_hours_sampler:
+        dist: lognormal
+        median: 6
+        p90: 18
   qa_lead:
-    artefacts: [test_cases]
+    artefacts:
+    - test_cases
+    - qa_suite
     sla_hours: 8
     delegable: true
     delegate_to: quality_engineer
     auto_policy:
       approve_if_no_findings: true
       approve_if_only_minor: true
-      delay_hours_sampler: {dist: lognormal, median: 5, p90: 16}
+      delay_hours_sampler:
+        dist: lognormal
+        median: 5
+        p90: 16
   devops_engineer:
-    artefacts: [cicd_pipeline]
+    artefacts:
+    - cicd_pipeline
     sla_hours: 8
     delegable: true
     delegate_to: platform_engineer
     auto_policy:
       approve_if_no_findings: true
       approve_if_only_minor: true
-      delay_hours_sampler: {dist: lognormal, median: 4, p90: 12}
+      delay_hours_sampler:
+        dist: lognormal
+        median: 4
+        p90: 12
+  security_architect:
+    artefacts:
+    - security_compliance
+    sla_hours: 8
+    delegable: true
+    delegate_to: compliance_officer
+    auto_policy:
+      approve_if_no_findings: true
+      approve_if_only_minor: true
+      delay_hours_sampler:
+        dist: lognormal
+        median: 6
+        p90: 18
+  data_architect:
+    artefacts:
+    - data_model
+    sla_hours: 8
+    delegable: true
+    delegate_to: dba
+    auto_policy:
+      approve_if_no_findings: true
+      approve_if_only_minor: true
+      delay_hours_sampler:
+        dist: lognormal
+        median: 5
+        p90: 16
+  release_manager:
+    artefacts:
+    - release_plan
+    sla_hours: 8
+    delegable: true
+    delegate_to: tech_lead
+    auto_policy:
+      approve_if_no_findings: true
+      approve_if_only_minor: true
+      delay_hours_sampler:
+        dist: lognormal
+        median: 4
+        p90: 12
 escalation:
   after_rounds: 2
   to: product_owner
+riesgo:
+  user_story_set: alto
+  solution_architecture: alto
+  security_compliance: alto
+  code_review: alto
+  release_plan: alto
+  data_model: pii
+  domain_model: bajo
+  ux_spec: bajo
+  api_design: bajo
+  backend_code: bajo
+  test_cases: bajo
+  qa_suite: bajo
+  cicd_pipeline: bajo

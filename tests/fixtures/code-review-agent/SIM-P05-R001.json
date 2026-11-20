@@ -1,0 +1,29 @@
+{
+ "req_id": "SIM-P05-R001",
+ "hallazgos": [
+  {
+   "id": "FIND-001",
+   "severidad": "menor",
+   "archivo": "app/main.py",
+   "linea": 1,
+   "regla": "estilo",
+   "descripcion": "el módulo generado no define logging estructurado",
+   "recomendacion": "agregar logging con correlation_id en la siguiente iteración"
+  }
+ ],
+ "veredicto": "aprobado",
+ "provenance": {
+  "contract_version": "1.0",
+  "req_id": "SIM-P05-R001",
+  "agent": "code-review",
+  "phase": "calidad",
+  "inputs": [
+   "backend_code",
+   "qa_suite"
+  ],
+  "knowledge_refs": [
+   "convenciones_codigo"
+  ],
+  "assumptions": []
+ }
+}

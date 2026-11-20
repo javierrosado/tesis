@@ -1,0 +1,59 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "agents/qa-automation/output.schema.json",
+ "title": "QaSuite",
+ "description": "Salida de qa-automation-agent (Tabla 17): suites pytest ejecutables contra el servicio generado; F5 las ejecuta y registra cobertura, fallos (defectos detectados) y trazabilidad.",
+ "type": "object",
+ "required": [
+  "req_id",
+  "suites",
+  "provenance"
+ ],
+ "properties": {
+  "req_id": {
+   "type": "string"
+  },
+  "suites": {
+   "type": "array",
+   "items": {
+    "type": "object",
+    "required": [
+     "id",
+     "casos",
+     "lineas"
+    ],
+    "properties": {
+     "id": {
+      "type": "string",
+      "pattern": "^SA-[0-9]{3}$"
+     },
+     "casos": {
+      "type": "array",
+      "items": {
+       "type": "string",
+       "pattern": "^TC-(UNIT|INT|E2E)-[0-9]{3}$"
+      },
+      "minItems": 1,
+      "maxItems": 12
+     },
+     "lineas": {
+      "type": "array",
+      "items": {
+       "type": "string",
+       "maxLength": 200
+      },
+      "minItems": 3,
+      "maxItems": 120
+     }
+    },
+    "additionalProperties": false
+   },
+   "minItems": 1,
+   "maxItems": 6
+  },
+  "provenance": {
+   "$ref": "../../contracts/provenance.schema.json"
+  }
+ },
+ "additionalProperties": false
+}

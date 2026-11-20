@@ -1,0 +1,21 @@
+name: release-manager-agent
+domain: devops
+phase: devops
+version: "1.0"
+purpose: >
+  Coordinar el versionado semántico, la ventana de despliegue, los criterios formales de go/no-go y la
+  estrategia de rollback, garantizando que solo llegue a staging/producción lo que supera todos los controles.
+prompt: prompt.md
+input_schema: null      # recibe {cicd_pipeline, estado_calidad, security_compliance, hoy}
+output_schema: output.schema.json
+produces: release_plan
+requires: {json_mode: true, context_tokens: 32000, language: es, tools: [rag.search]}
+consumes_from: [cicd-pipeline-agent, code-review-agent, qa-automation-agent]
+handoff_to: [orchestrator]
+reviewed_by: governance-agent
+verification:
+  - {id: schema_valid, rule: "schema_valid == true"}
+  - {id: window_valid, rule: "window_valid == true", description: "martes o jueves y no anterior a hoy"}
+  - {id: decision_consistent, rule: "decision_consistent == true", description: "go solo si checklist y hechos objetivos lo permiten"}
+  - {id: refinement_rounds, rule: "refinement_rounds <= 1"}
+gate: {role: release_manager, artefact: release_plan, sla_hours: 8, delegable: true}

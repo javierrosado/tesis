@@ -1,0 +1,21 @@
+name: qa-automation-agent
+domain: calidad
+phase: calidad
+version: "1.0"
+purpose: >
+  Construir y ejecutar suites de regresión automatizadas sobre el servicio generado, con trazabilidad a los
+  casos de prueba, reportando cobertura y fallos (defectos detectados antes del despliegue).
+prompt: prompt.md
+input_schema: null      # recibe {test_cases, api_design, servicio}
+output_schema: output.schema.json
+produces: qa_suite
+requires: {json_mode: true, context_tokens: 32000, language: es, tools: [rag.search]}
+consumes_from: [test-case-generator-agent, backend-developer-agent]
+handoff_to: [code-review-agent, cicd-pipeline-agent]
+reviewed_by: governance-agent
+verification:
+  - {id: schema_valid, rule: "schema_valid == true"}
+  - {id: tc_coverage, rule: "tc_coverage == 1.0", description: "todo TC con ≥1 suite"}
+  - {id: suite_runs, rule: "suite_runs == true", description: "pytest recolecta y ejecuta las suites sin errores de colección"}
+  - {id: refinement_rounds, rule: "refinement_rounds <= 1"}
+gate: {role: qa_lead, artefact: qa_suite, sla_hours: 8, delegable: true}

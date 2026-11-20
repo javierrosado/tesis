@@ -1,0 +1,41 @@
+{
+ "req_id": "SIM-P05-R001",
+ "suites": [
+  {
+   "id": "SA-001",
+   "casos": [
+    "TC-INT-001",
+    "TC-UNIT-001",
+    "TC-UNIT-002",
+    "TC-E2E-001"
+   ],
+   "lineas": [
+    "def test_estado_pedido(client):",
+    "    r = client.get(\"/v1/pedidos/P-001/estado\")",
+    "    assert r.status_code == 200",
+    "    assert r.json()[\"estado\"] == \"despachado\"",
+    "",
+    "def test_pedido_inexistente(client):",
+    "    r = client.get(\"/v1/pedidos/NOPE/estado\")",
+    "    assert r.status_code == 404",
+    "",
+    "def test_zona_con_transito(db):",
+    "    assert db[\"zona_entrega\"][0][\"dias_transito\"] > 0"
+   ]
+  }
+ ],
+ "provenance": {
+  "contract_version": "1.0",
+  "req_id": "SIM-P05-R001",
+  "agent": "qa-automation",
+  "phase": "calidad",
+  "inputs": [
+   "test_cases",
+   "backend_code"
+  ],
+  "knowledge_refs": [
+   "convenciones_codigo"
+  ],
+  "assumptions": []
+ }
+}

@@ -1,0 +1,21 @@
+name: security-compliance-agent
+domain: arquitectura
+phase: arquitectura
+version: "1.0"
+purpose: >
+  Añadir controles de seguridad (OWASP), puertas de seguridad del CI/CD y hallazgos con remediación a la
+  arquitectura de solución, asegurando los requisitos de seguridad desde el diseño.
+prompt: prompt.md
+input_schema: null      # recibe {solution_architecture}
+output_schema: output.schema.json
+produces: security_compliance
+requires: {json_mode: true, context_tokens: 32000, language: es, tools: [rag.search]}
+consumes_from: [solution-architect-agent]
+handoff_to: [api-designer-agent, cicd-pipeline-agent]
+reviewed_by: governance-agent
+verification:
+  - {id: schema_valid, rule: "schema_valid == true"}
+  - {id: sec_coverage, rule: "sec_coverage == 1.0", description: "todo SEC-xxx de la arquitectura cubierto por ≥1 control"}
+  - {id: comps_valid, rule: "comps_valid == 1.0", description: "los controles aplican a componentes declarados"}
+  - {id: refinement_rounds, rule: "refinement_rounds <= 1"}
+gate: {role: security_architect, artefact: security_compliance, sla_hours: 8, delegable: true}

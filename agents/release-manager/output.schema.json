@@ -1,0 +1,112 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "agents/release-manager/output.schema.json",
+ "title": "ReleasePlan",
+ "description": "Salida de release-manager-agent (Tabla 18): plan de release con versión semver, checklist go/no-go con evidencia, ventana y estrategia de rollback.",
+ "type": "object",
+ "required": [
+  "req_id",
+  "release",
+  "provenance"
+ ],
+ "properties": {
+  "req_id": {
+   "type": "string"
+  },
+  "release": {
+   "type": "object",
+   "required": [
+    "id",
+    "version",
+    "checklist",
+    "decision",
+    "ventana",
+    "rollback"
+   ],
+   "properties": {
+    "id": {
+     "type": "string",
+     "pattern": "^RELEASE-[0-9]{3}$"
+    },
+    "version": {
+     "type": "string",
+     "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+    },
+    "checklist": {
+     "type": "array",
+     "items": {
+      "type": "object",
+      "required": [
+       "criterio",
+       "cumple",
+       "evidencia"
+      ],
+      "properties": {
+       "criterio": {
+        "type": "string",
+        "minLength": 5,
+        "maxLength": 150
+       },
+       "cumple": {
+        "type": "boolean"
+       },
+       "evidencia": {
+        "type": "string",
+        "minLength": 3,
+        "maxLength": 200
+       }
+      },
+      "additionalProperties": false
+     },
+     "minItems": 3,
+     "maxItems": 10
+    },
+    "decision": {
+     "type": "string",
+     "enum": [
+      "go",
+      "no-go"
+     ]
+    },
+    "ventana": {
+     "type": "string",
+     "pattern": "^20[0-9]{2}-[01][0-9]-[0-3][0-9]$"
+    },
+    "rollback": {
+     "type": "object",
+     "required": [
+      "estrategia",
+      "pasos"
+     ],
+     "properties": {
+      "estrategia": {
+       "type": "string",
+       "enum": [
+        "blue-green",
+        "canary",
+        "redeploy-anterior",
+        "feature-flag"
+       ]
+      },
+      "pasos": {
+       "type": "array",
+       "items": {
+        "type": "string",
+        "minLength": 5,
+        "maxLength": 200
+       },
+       "minItems": 2,
+       "maxItems": 8
+      }
+     },
+     "additionalProperties": false
+    }
+   },
+   "additionalProperties": false
+  },
+  "provenance": {
+   "$ref": "../../contracts/provenance.schema.json"
+  }
+ },
+ "additionalProperties": false
+}

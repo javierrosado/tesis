@@ -1,0 +1,76 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "agents/backend-developer/output.schema.json",
+ "title": "BackendCode",
+ "description": "Salida de backend-developer-agent (Tabla 16): cuerpo de cada operación y datos semilla. El servicio FastAPI (rutas, modelos, almacén) lo genera core/render.py desde api_design y data_model; F5 lo importa y lo prueba con smoke tests reales.",
+ "type": "object",
+ "required": [
+  "req_id",
+  "handlers",
+  "semillas",
+  "provenance"
+ ],
+ "properties": {
+  "req_id": {
+   "type": "string"
+  },
+  "handlers": {
+   "type": "array",
+   "items": {
+    "type": "object",
+    "required": [
+     "endpoint",
+     "lineas"
+    ],
+    "properties": {
+     "endpoint": {
+      "type": "string",
+      "pattern": "^EP-[0-9]{3}$"
+     },
+     "lineas": {
+      "type": "array",
+      "items": {
+       "type": "string",
+       "maxLength": 400
+      },
+      "minItems": 1,
+      "maxItems": 60
+     }
+    },
+    "additionalProperties": false
+   },
+   "minItems": 1,
+   "maxItems": 12
+  },
+  "semillas": {
+   "type": "array",
+   "items": {
+    "type": "object",
+    "required": [
+     "tabla",
+     "filas"
+    ],
+    "properties": {
+     "tabla": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]{0,40}$"
+     },
+     "filas": {
+      "type": "array",
+      "items": {
+       "type": "object"
+      },
+      "minItems": 1,
+      "maxItems": 5
+     }
+    },
+    "additionalProperties": false
+   },
+   "maxItems": 10
+  },
+  "provenance": {
+   "$ref": "../../contracts/provenance.schema.json"
+  }
+ },
+ "additionalProperties": false
+}

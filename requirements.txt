@@ -3,6 +3,10 @@ jsonschema>=4.20
 PyYAML>=6.0
 pytest>=8.0
 openapi-spec-validator>=0.7
+fastapi>=0.110
+httpx>=0.27
+ruff>=0.5
+bandit>=1.7
 # proveedor hf_local (Fase 2 y 3; instalar en Colab/Kaggle con GPU)
 # torch>=2.3
 # transformers>=4.44

@@ -146,6 +146,8 @@ def workflow_errors(p: dict) -> list[str]:
         for n in j.get("needs", []):
             if n not in ids or n == j["id"]:
                 errs.append(f"{p['id']}/{j['id']}: needs '{n}' no es otro job del pipeline")
+        # Regla v2 (la usada para entrenar y evaluar el LoRA de cicd en F3): solo el job de pytest. El checkout del resto de jobs
+        # lo añade el empaquetado del despliegue como adaptación determinista registrada (core/deploy.py, needs_checkout).
         if any("pytest" in (s.get("run") or "") for s in j["steps"]) and not any((s.get("uses") or "").startswith("actions/checkout@") for s in j["steps"]):
             errs.append(f"{p['id']}/{j['id']}: el job que ejecuta pytest debe hacer checkout del código en sus propios pasos (cada job corre en una máquina nueva)")
         for s in j["steps"]:
@@ -187,10 +189,110 @@ def metrics_cicd(out: dict, ctx: dict) -> dict:
             "prod_manual_gate": 1.0 if prod and all(any(g["etapa"] == "deploy" and g["tipo"] == "manual" for g in p["gates"]) for p in prod) else 0.0}
 
 
+# ---------------------------------------------------------------- F4: agentes con verificación por ejecución real
+def metrics_security(out: dict, ctx: dict) -> dict:
+    secs = {r["id"] for r in ctx.get("solution_architecture", {}).get("requisitos_seguridad", [])}
+    comps = {c["id"] for c in ctx.get("solution_architecture", {}).get("componentes", [])}
+    covered = {r for c in out.get("controles", []) for r in c.get("requisitos", [])}
+    ctrls = out.get("controles", [])
+    return {"sec_coverage": (len(secs & covered) / len(secs)) if secs else 1.0,
+            "comps_valid": (sum(1 for c in ctrls if set(c["aplica_a"]) <= comps) / len(ctrls)) if ctrls else 0.0}
+
+
+def metrics_data_model(out: dict, ctx: dict) -> dict:
+    from .tools.sandbox import ddl_check
+    ents = {norm(e["nombre"]) for e in ctx.get("domain_model", {}).get("entidades", [])}
+    got = {norm(t["entidad"]) for t in out.get("tablas", [])} | {norm(t["nombre"]) for t in out.get("tablas", [])}
+    cols = [c for t in out.get("tablas", []) for c in t["columnas"]]
+    pii = [c for c in cols if c["pii"]]
+    return {"entity_coverage": (len({e for e in ents if any(e == g or e in g for g in got)}) / len(ents)) if ents else 1.0,
+            "ddl_ok": ddl_check(out)["ok"] and all(any(c["pk"] for c in t["columnas"]) for t in out.get("tablas", [])),
+            "pii_protected": (sum(1 for c in pii if c["enmascarado"]) / len(pii)) if pii else 1.0}
+
+
+def app_files(ctx: dict, backend: dict | None = None) -> dict:
+    from .tools.sandbox import render_app
+    return render_app(ctx.get("api_design", {}), ctx.get("data_model", {}), backend if backend is not None else ctx.get("backend_code", {}))
+
+
+def metrics_backend(out: dict, ctx: dict) -> dict:
+    from .tools.sandbox import smoke
+    eps = [e["id"] for e in ctx.get("api_design", {}).get("endpoints", [])]
+    hs = {h["endpoint"] for h in out.get("handlers", [])}
+    sm = smoke(app_files(ctx, out), ctx.get("api_design", {}))
+    res = sm.get("resultados", [])
+    nested = any(l.lstrip().startswith(("def ", "async def ", "import ", "from ")) and not l.startswith(" ") for h in out.get("handlers", []) for l in h["lineas"])
+    return {"compiles": bool(sm.get("import_ok")) and not nested,
+            "routes_coverage": (len(set(eps) & hs) / len(eps)) if eps else 0.0,
+            "smoke_ok": (sum(1 for r in res if r["status"] < 500) / len(res)) if res else 0.0}
+
+
+def metrics_qa(out: dict, ctx: dict) -> dict:
+    from .tools.sandbox import run_tests
+    tcs = {c["id"] for c in ctx.get("test_cases", {}).get("casos", [])}
+    got = {c for s in out.get("suites", []) for c in s.get("casos", [])}
+    rt = run_tests(app_files(ctx), out)
+    propios = [f for f in rt["fallos"] if QA_OWN_ERROR.search(f["detalle"])]   # la prueba falla por su propio código, no por el servicio
+    return {"tc_coverage": (len(tcs & got) / len(tcs)) if tcs else 1.0, "suite_runs": rt["suite_runs"] and rt["errors"] == 0 and not propios, "pass_rate": rt["pass_rate"]}
+
+
+USES_REPO = re.compile(r"pytest|\./|requirements|deploy|uvicorn|python ")
+
+
+def needs_checkout(job: dict) -> bool:
+    """El job usa archivos del repositorio pero no los descarga (cada job de GitHub Actions corre en una máquina nueva)."""
+    return any(USES_REPO.search(s.get("run") or "") for s in job.get("steps", [])) and not any((s.get("uses") or "").startswith("actions/checkout@") for s in job.get("steps", []))
+
+
+QA_OWN_ERROR = re.compile(r"ModuleNotFoundError|ImportError|NameError|SyntaxError|fixture '[^']+' not found")
+
+
+def quality_facts(ctx: dict) -> dict:
+    """Hechos objetivos de calidad del requerimiento (pruebas reales + hallazgos críticos)."""
+    from .tools.sandbox import run_tests
+    from .tools.sandbox import in_handlers
+    files = app_files(ctx)
+    rt = run_tests(files, ctx.get("qa_suite", {})) if ctx.get("qa_suite") else {"failed": 0, "errors": 0, "collected": 0}
+    crit = [h for h in ctx.get("code_review", {}).get("hallazgos", []) if h["severidad"] == "critico" and in_handlers(files, h["archivo"], h["linea"])]
+    return {"pruebas_fallidas": rt.get("failed", 0) + rt.get("errors", 0), "pruebas_total": rt.get("collected", 0), "criticos": len(crit)}
+
+
+def metrics_code_review(out: dict, ctx: dict) -> dict:
+    from .tools.sandbox import static_analysis, run_tests, in_handlers
+    files = app_files(ctx)
+    sa = static_analysis(files)
+    serious = {(b["archivo"], b["linea"]) for b in sa["bandit"] if b["severidad"] in ("HIGH", "MEDIUM") and in_handlers(files, b["archivo"], b["linea"])}
+    found = {(h["archivo"], h["linea"]) for h in out.get("hallazgos", [])}
+    rt = run_tests(files, ctx.get("qa_suite", {})) if ctx.get("qa_suite") else {"failed": 0, "errors": 0}
+    hs = out.get("hallazgos", [])
+    must_change = any(h["severidad"] == "critico" for h in hs) or (rt.get("failed", 0) + rt.get("errors", 0)) > 0
+    return {"findings_in_handlers": (sum(1 for h in hs if in_handlers(files, h["archivo"], h["linea"])) / len(hs)) if hs else 1.0,
+            "bandit_covered": (len(serious & found) / len(serious)) if serious else 1.0,
+            "verdict_consistent": 1.0 if (out.get("veredicto") == "cambios_requeridos") == must_change else 0.0}
+
+
+def metrics_release(out: dict, ctx: dict) -> dict:
+    from datetime import date
+    r = out.get("release", {})
+    hoy = date.fromisoformat(ctx.get("hoy") or date.today().isoformat())
+    try:
+        v = date.fromisoformat(r.get("ventana", ""))
+        window_ok = v.weekday() in (1, 3) and v >= hoy
+    except ValueError:
+        window_ok = False
+    q = quality_facts(ctx)
+    facts_ok = q["pruebas_fallidas"] == 0 and q["criticos"] == 0 and q["pruebas_total"] > 0
+    go = r.get("decision") == "go"
+    checklist_ok = all(c["cumple"] for c in r.get("checklist", []))
+    return {"window_valid": window_ok, "decision_consistent": go == (facts_ok and checklist_ok) and not (go and not facts_ok)}
+
+
 METRICS = {"product-analyst-agent": metrics_product_analyst, "domain-modeling-agent": metrics_domain_modeling,
            "ux-ui-copilot-agent": metrics_ux, "governance-agent": metrics_governance,
            "solution-architect-agent": metrics_solution_architect, "api-designer-agent": metrics_api_designer,
-           "test-case-generator-agent": metrics_test_cases, "cicd-pipeline-agent": metrics_cicd}
+           "test-case-generator-agent": metrics_test_cases, "cicd-pipeline-agent": metrics_cicd,
+           "security-compliance-agent": metrics_security, "data-model-agent": metrics_data_model, "backend-developer-agent": metrics_backend,
+           "qa-automation-agent": metrics_qa, "code-review-agent": metrics_code_review, "release-manager-agent": metrics_release}
 
 _RULE = re.compile(r"^(\w+)\s*(==|>=|<=|>|<)\s*([\d.]+|true|false)$")
 

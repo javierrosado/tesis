@@ -1,0 +1,154 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "agents/security-compliance/output.schema.json",
+ "title": "SecurityCompliance",
+ "description": "Salida de security-compliance-agent (Tabla 15): controles OWASP por componente, puertas de seguridad del pipeline y hallazgos con remediación.",
+ "type": "object",
+ "required": [
+  "req_id",
+  "controles",
+  "gates",
+  "hallazgos",
+  "provenance"
+ ],
+ "properties": {
+  "req_id": {
+   "type": "string"
+  },
+  "controles": {
+   "type": "array",
+   "items": {
+    "type": "object",
+    "required": [
+     "id",
+     "owasp",
+     "descripcion",
+     "requisitos",
+     "aplica_a"
+    ],
+    "properties": {
+     "id": {
+      "type": "string",
+      "pattern": "^CTRL-[0-9]{3}$"
+     },
+     "owasp": {
+      "type": "string",
+      "enum": [
+       "A01",
+       "A02",
+       "A03",
+       "A04",
+       "A05",
+       "A06",
+       "A07",
+       "A08",
+       "A09",
+       "A10"
+      ]
+     },
+     "descripcion": {
+      "type": "string",
+      "minLength": 10,
+      "maxLength": 300
+     },
+     "requisitos": {
+      "type": "array",
+      "items": {
+       "type": "string",
+       "pattern": "^SEC-[0-9]{3}$"
+      },
+      "maxItems": 6
+     },
+     "aplica_a": {
+      "type": "array",
+      "items": {
+       "type": "string",
+       "pattern": "^COMP-[0-9]{3}$"
+      },
+      "minItems": 1,
+      "maxItems": 6
+     }
+    },
+    "additionalProperties": false
+   },
+   "minItems": 1,
+   "maxItems": 15
+  },
+  "gates": {
+   "type": "array",
+   "items": {
+    "type": "object",
+    "required": [
+     "id",
+     "etapa",
+     "criterio"
+    ],
+    "properties": {
+     "id": {
+      "type": "string",
+      "pattern": "^GATE-[0-9]{3}$"
+     },
+     "etapa": {
+      "type": "string",
+      "enum": [
+       "build",
+       "test",
+       "security",
+       "deploy"
+      ]
+     },
+     "criterio": {
+      "type": "string",
+      "minLength": 10,
+      "maxLength": 200
+     }
+    },
+    "additionalProperties": false
+   },
+   "minItems": 1,
+   "maxItems": 6
+  },
+  "hallazgos": {
+   "type": "array",
+   "items": {
+    "type": "object",
+    "required": [
+     "id",
+     "severidad",
+     "descripcion",
+     "remediacion"
+    ],
+    "properties": {
+     "id": {
+      "type": "string",
+      "pattern": "^FIND-[0-9]{3}$"
+     },
+     "severidad": {
+      "type": "string",
+      "enum": [
+       "critico",
+       "mayor",
+       "menor"
+      ]
+     },
+     "descripcion": {
+      "type": "string",
+      "minLength": 10,
+      "maxLength": 300
+     },
+     "remediacion": {
+      "type": "string",
+      "minLength": 10,
+      "maxLength": 300
+     }
+    },
+    "additionalProperties": false
+   },
+   "maxItems": 8
+  },
+  "provenance": {
+   "$ref": "../../contracts/provenance.schema.json"
+  }
+ },
+ "additionalProperties": false
+}

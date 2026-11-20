@@ -47,6 +47,14 @@ providers:
     temperature: 0.3
     chat_template_kwargs: {enable_thinking: false}
 
+  vllm_teacher:                        # D-F4-1 opción C (20/11/2026): segundo vLLM del mismo job para los agentes que escriben código
+    adapter: openai_compat
+    model: Qwen/Qwen3-32B-AWQ
+    url: http://localhost:8001/v1
+    max_new_tokens: 6144
+    temperature: 0.2
+    chat_template_kwargs: {enable_thinking: false}
+
   hf_endpoint:                         # Inference Endpoint dedicado en Hugging Face (opcional)
     adapter: hf_endpoint
     model: Qwen/Qwen3-8B
@@ -58,9 +66,14 @@ providers:
     model: qwen3:8b
     url: http://localhost:11434
 
-overrides: {}
-# Fase 3, ejemplo:
-# overrides:
-#   product-analyst-agent:
-#     provider: hf_local
-#     adapter_weights: javierrosado/product-analyst-lora   # adaptador LoRA en HF Hub
+overrides:
+  # F3: cada agente entrenable usa su adaptador QLoRA, servido por vLLM con el mismo nombre (jobs/run_pipeline_job.py)
+  product-analyst-agent: {for_provider: vllm_local, model: product-analyst-agent}
+  solution-architect-agent: {for_provider: vllm_local, model: solution-architect-agent}
+  api-designer-agent: {for_provider: vllm_local, model: api-designer-agent}
+  test-case-generator-agent: {for_provider: vllm_local, model: test-case-generator-agent}
+  cicd-pipeline-agent: {for_provider: vllm_local, model: cicd-pipeline-agent}
+  # D-F4-1 opción C: backend, QA y revisión de código (no entrenados) los atiende el maestro Qwen3-32B-AWQ (open-weight, mismo job)
+  backend-developer-agent: {for_provider: vllm_local, switch_to: vllm_teacher}
+  qa-automation-agent: {for_provider: vllm_local, switch_to: vllm_teacher}
+  code-review-agent: {for_provider: vllm_local, switch_to: vllm_teacher}

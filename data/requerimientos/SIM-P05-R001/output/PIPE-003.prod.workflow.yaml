@@ -15,5 +15,7 @@ jobs:
     - test
     environment: prod
     steps:
+    - name: checkout
+      uses: actions/checkout@v4
     - name: Desplegar
       run: ./deploy.sh prod

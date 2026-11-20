@@ -1,30 +1,30 @@
-# DAG del pipeline (F3 handoffs). Los nodos de un mismo "parallel" corren a la vez.
-# Cada agente pasa por governance (determinista) y por su gate humano (RACI) antes de que su artefacto
-# esté disponible para el siguiente. Vertical extendido (F2-A): Discovery → Arquitectura → Ingeniería → Calidad → DevOps,
-# con el agente entrenable de cada dominio.
-version: "1.1"
-pipeline: pipeline-cinco-dominios
+# DAG del pipeline completo (F4): 13 agentes funcionales + governance (determinista) + knowledge-rag (herramienta)
+# + skill-orchestrator (este orquestador). Discovery → Arquitectura → Ingeniería → Calidad → DevOps → despliegue.
+# Los nodos de un "parallel" corren a la vez. Cada artefacto pasa por governance y por su gate RACI (aprobación por riesgo).
+version: "2.0"
+pipeline: pipeline-16-agentes
 stages:
-  - id: intake
-    agent: null
-    action: load_business_request      # normaliza brief + restricciones → BusinessRequest
-  - id: stories
-    agent: product-analyst-agent
-    inputs: [intake]
-    review: governance-agent
-    gate: product_owner
+  - {id: intake, agent: null, action: load_business_request}
+  - {id: stories, agent: product-analyst-agent, inputs: [intake], review: governance-agent, gate: product_owner}
   - id: fanout
     parallel:
       - {id: domain, agent: domain-modeling-agent, inputs: [stories], review: governance-agent, gate: tech_lead}
       - {id: ux, agent: ux-ui-copilot-agent, inputs: [stories], review: governance-agent, gate: product_owner}
   - {id: discovery_done, action: emit_handoff, from: discovery, to: arquitectura, inputs: [stories, domain, ux]}
   - {id: architecture, agent: solution-architect-agent, inputs: [stories, domain, ux], review: governance-agent, gate: tech_lead}
-  - {id: architecture_done, action: emit_handoff, from: arquitectura, to: ingenieria, inputs: [architecture]}
+  - {id: security, agent: security-compliance-agent, inputs: [architecture], review: governance-agent, gate: security_architect}
+  - {id: architecture_done, action: emit_handoff, from: arquitectura, to: ingenieria, inputs: [architecture, security]}
   - {id: api, agent: api-designer-agent, inputs: [architecture, domain], review: governance-agent, gate: api_architect}
-  - {id: engineering_done, action: emit_handoff, from: ingenieria, to: calidad, inputs: [api]}
-  - {id: tests, agent: test-case-generator-agent, inputs: [stories, api], review: governance-agent, gate: qa_lead}
+  - {id: data, agent: data-model-agent, inputs: [domain, api, architecture], review: governance-agent, gate: data_architect}
+  - id: build
+    parallel:
+      - {id: backend, agent: backend-developer-agent, inputs: [api, data], review: governance-agent, gate: tech_lead}
+      - {id: tests, agent: test-case-generator-agent, inputs: [stories, api], review: governance-agent, gate: qa_lead}
+  - {id: engineering_done, action: emit_handoff, from: ingenieria, to: calidad, inputs: [backend, tests]}
+  - {id: quality, action: quality_loop, max_cycles: 2}     # qa-automation (pruebas reales) + code-review (+ remediación del backend)
   - {id: quality_done, action: emit_handoff, from: calidad, to: devops, inputs: [tests]}
-  - {id: cicd, agent: cicd-pipeline-agent, inputs: [architecture, api, tests], review: governance-agent, gate: devops_engineer}
-  - {id: devops_done, action: emit_handoff, from: devops, to: release, inputs: [cicd]}
+  - {id: cicd, agent: cicd-pipeline-agent, inputs: [architecture, api, tests, security], review: governance-agent, gate: devops_engineer}
+  - {id: release, agent: release-manager-agent, inputs: [cicd], review: governance-agent, gate: release_manager}
+  - {id: deploy, action: deploy}
 retry:
   max_governance_rounds: 2             # tras 2 rechazos → escalar a humano

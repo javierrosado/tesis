@@ -13,3 +13,6 @@ outputs/
 .venv/
 *.env
 secrets/
+
+# estado de corridas (se sincroniza con el Hub, no con git)
+data/requerimientos/*/output/

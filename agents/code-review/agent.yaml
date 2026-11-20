@@ -1,0 +1,22 @@
+name: code-review-agent
+domain: calidad
+phase: calidad
+version: "1.0"
+purpose: >
+  Revisar el código generado combinando análisis estático real (ruff, bandit) y revisión del modelo,
+  emitiendo hallazgos FIND-xxx localizados y un veredicto coherente con la severidad.
+prompt: prompt.md
+input_schema: null      # recibe {codigo, analisis_estatico, reporte_pruebas}
+output_schema: output.schema.json
+produces: code_review
+requires: {json_mode: true, context_tokens: 32000, language: es, tools: [rag.search]}
+consumes_from: [backend-developer-agent, qa-automation-agent]
+handoff_to: [cicd-pipeline-agent, release-manager-agent]
+reviewed_by: governance-agent
+verification:
+  - {id: schema_valid, rule: "schema_valid == true"}
+  - {id: findings_in_handlers, rule: "findings_in_handlers == 1.0", description: "los hallazgos apuntan al código escrito por backend-developer"}
+  - {id: bandit_covered, rule: "bandit_covered == 1.0", description: "todo problema HIGH/MEDIUM de bandit reportado"}
+  - {id: verdict_consistent, rule: "verdict_consistent == 1.0", description: "cambios_requeridos si hay críticos o pruebas fallidas"}
+  - {id: refinement_rounds, rule: "refinement_rounds <= 1"}
+gate: {role: tech_lead, artefact: code_review, sla_hours: 8, delegable: true}

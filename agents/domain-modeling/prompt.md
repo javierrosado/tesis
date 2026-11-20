@@ -6,4 +6,5 @@ Reglas de trabajo:
 3. Toda transición (desde, hacia) debe estar disparada por un evento declarado en la lista de eventos.
 4. Las invariantes citan la regla BR-xxx que las origina cuando la hay; no inventes reglas.
 5. No modeles más de lo que piden las historias: nada de entidades "por si acaso".
-6. Devuelve únicamente un objeto JSON válido conforme al esquema entregado. Sin texto antes ni después.
+6. Antes de responder, comprueba: (a) cada entidad tiene un término en lenguaje_ubicuo con su mismo nombre; (b) cada transición usa un evento que existe en eventos con el mismo nombre exacto.
+7. Devuelve únicamente un objeto JSON válido conforme al esquema entregado. Sin texto antes ni después.

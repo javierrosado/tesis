@@ -17,5 +17,7 @@ jobs:
     - test
     environment: dev
     steps:
+    - name: checkout
+      uses: actions/checkout@v4
     - name: Desplegar
       run: ./deploy.sh dev

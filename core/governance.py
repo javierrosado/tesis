@@ -8,6 +8,8 @@ Reglas, en orden:
   3. Procedencia — provenance coherente con el requerimiento y el agente; knowledge_refs no vacío (mayor).
 Veredicto: rechazado si hay hallazgos bloqueantes o mayores; aprobado en otro caso. El escalamiento
 lo decide el orquestador al agotar las rondas (max_governance_rounds)."""
+import json
+
 import jsonschema
 from . import verify
 
@@ -75,6 +77,73 @@ def _f5_detail(agent_name: str, key: str, out: dict, ctx: dict, res: dict) -> tu
         return "Todo pipeline debe tener un paso run que ejecute pytest antes de desplegar", "pipelines[].jobs[].steps"
     if agent_name == "cicd-pipeline-agent" and key == "prod_manual_gate":
         return "El pipeline de prod necesita una puerta de etapa deploy y tipo manual", "pipelines[prod].gates"
+    if agent_name == "security-compliance-agent" and key == "sec_coverage":
+        secs = [r["id"] for r in ctx.get("solution_architecture", {}).get("requisitos_seguridad", [])]
+        cov = {r for c in out.get("controles", []) for r in c.get("requisitos", [])}
+        return f"Todo requisito SEC-xxx necesita ≥1 control. Sin control: {', '.join(x for x in secs if x not in cov)}", "controles[].requisitos"
+    if agent_name == "security-compliance-agent" and key == "comps_valid":
+        comps = sorted(c["id"] for c in ctx.get("solution_architecture", {}).get("componentes", []))
+        return f"aplica_a solo puede citar componentes declarados: {', '.join(comps)}", "controles[].aplica_a"
+    if agent_name == "data-model-agent" and key == "entity_coverage":
+        got = {verify.norm(t["entidad"]) for t in out.get("tablas", [])}
+        miss = [e["nombre"] for e in ctx.get("domain_model", {}).get("entidades", []) if verify.norm(e["nombre"]) not in got]
+        return f"Toda entidad del dominio necesita una tabla (campo entidad). Sin tabla: {', '.join(miss)}", "tablas[].entidad"
+    if agent_name == "data-model-agent" and key == "ddl_ok":
+        from .tools.sandbox import ddl_check
+        sin_pk = [t["id"] for t in out.get("tablas", []) if not any(c["pk"] for c in t["columnas"])]
+        return f"El DDL generado no se ejecuta en SQLite: {ddl_check(out)['error'] or ''} {('Tablas sin pk: ' + ', '.join(sin_pk)) if sin_pk else ''}".strip(), "tablas"
+    if agent_name == "data-model-agent" and key == "pii_protected":
+        bad = [f'{t["nombre"]}.{c["nombre"]}' for t in out.get("tablas", []) for c in t["columnas"] if c["pii"] and not c["enmascarado"]]
+        return f"Columnas con datos personales sin enmascarar: {', '.join(bad)}", "tablas[].columnas"
+    if agent_name == "backend-developer-agent" and key == "compiles" and any(l.lstrip().startswith(("def ", "async def ", "import ", "from ")) and not l.startswith(" ") for h in out.get("handlers", []) for l in h["lineas"]):
+        return "lineas es solo el CUERPO del handler: no definas funciones (def), no importes módulos; empieza directamente con la lógica y termina con return", "handlers[].lineas"
+    if agent_name == "backend-developer-agent" and key in ("compiles", "smoke_ok"):
+        from .tools.sandbox import smoke, signatures as sandbox_signatures
+        sm = smoke(verify.app_files(ctx, out), ctx.get("api_design", {}))
+        if not sm.get("import_ok"):
+            hint = " Escribe todo texto Python (claves, tablas, mensajes, estados) entre comillas SIMPLES, p. ej. DB['pedido'], detail='no encontrado'." if "SyntaxError" in str(sm.get("error", "")) else ""
+            return f"El servicio no se puede importar: {sm.get('error', '')}.{hint}", "handlers[].lineas"
+        firmas = sandbox_signatures(ctx.get("api_design", {}))
+        bad = [f'{r["id"]}→{r["status"]}{(" " + r["error"]) if r.get("error") else ""}'
+               + (f' (en {r["id"]} solo existen los parámetros de: {firmas.get(r["id"], "")})' if "NameError" in str(r.get("error", "")) else "")
+               for r in sm.get("resultados", []) if r["status"] >= 500]
+        errs = " ".join(str(r.get("error", "")) for r in sm.get("resultados", []))
+        if "KeyError" in errs:
+            tabs = {t["nombre"]: [c["nombre"] for c in t["columnas"]] for t in ctx.get("data_model", {}).get("tablas", [])}
+            bad.append(f"KeyError: en DB solo existen estas tablas y columnas: {json.dumps(tabs, ensure_ascii=False)}; los campos del cuerpo llegan con los nombres del diseño (body['campo'])")
+        if "isoformat" in errs:
+            bad.append("Las fechas guardadas en DB son texto ISO (str): devuélvelas tal cual; usa datetime.now().isoformat() solo para fechas nuevas")
+        return f"Endpoints que responden error 5xx con datos de ejemplo (revisa nombres de tablas/columnas de DB, variables y que todo texto vaya entre comillas simples): {'; '.join(bad)}", "handlers"
+    if agent_name == "backend-developer-agent" and key == "routes_coverage":
+        eps = [e["id"] for e in ctx.get("api_design", {}).get("endpoints", [])]
+        hs = {h["endpoint"] for h in out.get("handlers", [])}
+        return f"Falta handler para: {', '.join(e for e in eps if e not in hs)}", "handlers"
+    if agent_name == "qa-automation-agent" and key == "tc_coverage":
+        tcs = [c["id"] for c in ctx.get("test_cases", {}).get("casos", [])]
+        got = {c for s in out.get("suites", []) for c in s.get("casos", [])}
+        return f"Casos sin suite: {', '.join(t for t in tcs if t not in got)}", "suites[].casos"
+    if agent_name == "qa-automation-agent" and key == "suite_runs":
+        from .tools.sandbox import run_tests
+        rt = run_tests(verify.app_files(ctx), out)
+        errs = [f["prueba"] + ": " + f["detalle"][:160] for f in rt["fallos"] if "setup" in f["detalle"] or verify.QA_OWN_ERROR.search(f["detalle"]) or f["prueba"] == "<colección>"][:4]
+        return (f"Las suites tienen errores propios (módulos inexistentes, fixtures inexistentes, nombres no definidos, sintaxis), no fallos del servicio. "
+                f"El servicio solo expone su API HTTP en app.main: prueba todo (también los casos unitarios) llamando a los endpoints con client, y usa solo los fixtures client y db: {'; '.join(errs)}"), "suites[].lineas"
+    if agent_name == "code-review-agent" and key == "bandit_covered":
+        from .tools.sandbox import static_analysis
+        sa = static_analysis(verify.app_files(ctx))
+        miss = [f'{b["archivo"]}:{b["linea"]} {b["regla"]}' for b in sa["bandit"] if b["severidad"] in ("HIGH", "MEDIUM")]
+        return f"Reporta como hallazgo cada problema de bandit HIGH/MEDIUM: {', '.join(miss)}", "hallazgos"
+    if agent_name == "code-review-agent" and key == "findings_in_handlers":
+        from .tools.sandbox import handler_spans
+        sp = verify.app_files(ctx); rng = ", ".join(f"{k}: líneas {a}-{b}" for k, (a, b) in handler_spans(sp).items())
+        return f"Solo se revisan los cuerpos de los handlers (el resto lo genera el sistema). Rangos válidos de app/main.py: {rng}", "hallazgos[].linea"
+    if agent_name == "code-review-agent" and key == "verdict_consistent":
+        return "veredicto debe ser cambios_requeridos si hay hallazgos criticos o pruebas fallidas, y aprobado en caso contrario", "veredicto"
+    if agent_name == "release-manager-agent" and key == "window_valid":
+        return f"ventana debe ser un martes o jueves igual o posterior a hoy ({ctx.get('hoy')})", "release.ventana"
+    if agent_name == "release-manager-agent" and key == "decision_consistent":
+        q = verify.quality_facts(ctx)
+        return f"decision inconsistente con los hechos: {q['pruebas_fallidas']} pruebas fallidas de {q['pruebas_total']}, {q['criticos']} hallazgos críticos; go solo si todo está en verde y todo el checklist se cumple", "release.decision"
     return f"{res['rule']} (valor actual {res['value']})", "<artefacto>"
 
 

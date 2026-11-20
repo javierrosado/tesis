@@ -1,0 +1,23 @@
+name: backend-developer-agent
+domain: ingenieria
+phase: ingenieria
+version: "1.0"
+purpose: >
+  Implementar la lógica de cada operación de la API sobre el modelo de datos, con las reglas de negocio,
+  produciendo un servicio ejecutable que se verifica con smoke tests reales.
+prompt: prompt.md
+input_schema: null      # recibe {api_design, data_model}
+output_schema: output.schema.json
+produces: backend_code
+requires: {json_mode: true, context_tokens: 32000, language: es, tools: [rag.search]}
+consumes_from: [api-designer-agent, data-model-agent]
+handoff_to: [qa-automation-agent, code-review-agent]
+reviewed_by: governance-agent
+verification:
+  - {id: schema_valid, rule: "schema_valid == true"}
+  - {id: compiles, rule: "compiles == true", description: "el servicio generado se importa sin errores"}
+  - {id: routes_coverage, rule: "routes_coverage == 1.0", description: "todo endpoint del diseño tiene handler"}
+  - {id: smoke_ok, rule: "smoke_ok >= 0.8", description: "proporción de endpoints que responden sin error 5xx"}
+  - {id: refinement_rounds, rule: "refinement_rounds <= 1"}
+gate: {role: tech_lead, artefact: backend_code, sla_hours: 8, delegable: true}
+max_governance_rounds: 4   # el backend se valida ejecutando el servicio (determinista y barato); se permiten más rondas de corrección

@@ -1,0 +1,22 @@
+name: data-model-agent
+domain: ingenieria
+phase: ingenieria
+version: "1.0"
+purpose: >
+  Transformar el modelo de dominio y el diseño de la API en un modelo de datos físico con DDL de creación
+  y rollback, reglas de protección de datos personales y claves foráneas.
+prompt: prompt.md
+input_schema: null      # recibe {domain_model, api_design, solution_architecture}
+output_schema: output.schema.json
+produces: data_model
+requires: {json_mode: true, context_tokens: 32000, language: es, tools: [rag.search]}
+consumes_from: [domain-modeling-agent, api-designer-agent, solution-architect-agent]
+handoff_to: [backend-developer-agent]
+reviewed_by: governance-agent
+verification:
+  - {id: schema_valid, rule: "schema_valid == true"}
+  - {id: entity_coverage, rule: "entity_coverage == 1.0", description: "toda entidad del dominio con tabla"}
+  - {id: ddl_ok, rule: "ddl_ok == true", description: "el DDL generado se ejecuta (up y down) en SQLite"}
+  - {id: pii_protected, rule: "pii_protected == 1.0", description: "toda columna pii está enmascarada"}
+  - {id: refinement_rounds, rule: "refinement_rounds <= 1"}
+gate: {role: data_architect, artefact: data_model, sla_hours: 8, delegable: true}

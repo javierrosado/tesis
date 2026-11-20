@@ -62,6 +62,9 @@ class Orchestrator:
         self.rag = KnowledgeRag(self.root / "data/knowledge")
         self.rng = random.Random(seed)
         self.gov = self.reg.agents["governance-agent"]
+        import os
+        if os.environ.get("GATES_MODE"):                 # p. ej. humo técnico con gates simulados; el piloto usa manual
+            self.reg.gates["mode"] = os.environ["GATES_MODE"]
         self.today = today or date.today().isoformat()
         self.examples: list[dict] = []           # F2-A: pares (mensajes ronda 0 → salida aprobada) para destilación
         self.rejections: list[dict] = []         # diagnóstico: salidas rechazadas por governance con sus hallazgos

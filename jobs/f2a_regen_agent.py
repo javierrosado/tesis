@@ -16,7 +16,7 @@ url = f"https://github.com/javierrosado/tesis/archive/refs/heads/{BRANCH}.tar.gz
 tarfile.open(fileobj=io.BytesIO(urllib.request.urlopen(url).read())).extractall("/tmp", filter="data")
 ROOT = Path(f"/tmp/tesis-{BRANCH.replace('/', '-')}"); os.chdir(ROOT); sys.path.insert(0, str(ROOT))
 srv = subprocess.Popen([sys.executable, "-m", "vllm.entrypoints.openai.api_server", "--model", TEACHER, "--port", "8000",
-                        "--max-model-len", "20000", "--gpu-memory-utilization", "0.92", "--max-num-seqs", "48", "--kv-cache-dtype", "fp8"],
+                        "--max-model-len", "20000", "--gpu-memory-utilization", "0.92", "--max-num-seqs", "48"],
                        stdout=open("/tmp/vllm.log", "w"), stderr=subprocess.STDOUT)
 for _ in range(180):
     try:

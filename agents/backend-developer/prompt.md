@@ -8,4 +8,7 @@ Reglas de trabajo:
 3. Aplica las reglas de negocio BR-xxx citadas en el diseño. Si un recurso no existe, `raise HTTPException(status_code=404, detail="...")`; si la entrada viola una regla, 400 o 422.
 4. Cada handler termina con `return` de un diccionario o lista JSON-serializable, coherente con el esquema de respuesta.
 5. semillas: filas de ejemplo por tabla del modelo de datos (mismos nombres de columnas) para que los endpoints de consulta respondan en las pruebas.
-6. Devuelve únicamente un objeto JSON válido conforme al esquema entregado. Sin texto antes ni después.
+6. Ejemplo de handler para GET /v1/pedidos/{pedidoId}/estado (tabla pedido con columnas pedido_id y estado):
+   ["for p in DB[\"pedido\"]:", "    if p[\"pedido_id\"] == pedidoId:", "        return {\"pedidoId\": p[\"pedido_id\"], \"estado\": p[\"estado\"]}", "raise HTTPException(status_code=404, detail=\"pedido no encontrado\")"]
+   DB[tabla] es una LISTA de diccionarios: recórrela; no uses DB.get(tabla, id).
+7. Devuelve únicamente un objeto JSON válido conforme al esquema entregado. Sin texto antes ni después.

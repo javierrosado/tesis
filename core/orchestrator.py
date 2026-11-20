@@ -255,7 +255,9 @@ class Orchestrator:
         if agent_name == "code-review-agent":
             files = verify.app_files(ctx)
             rt = sandbox.run_tests(files, ctx.get("qa_suite", {}))
-            return {"codigo": sandbox.numbered(files), "analisis_estatico": sandbox.static_analysis(files),
+            sa = sandbox.static_analysis(files)
+            keep = lambda xs: [x for x in xs if sandbox.in_handlers(files, x["archivo"], x["linea"])]
+            return {"codigo_handlers": sandbox.handler_code(files), "analisis_estatico": {"ruff": keep(sa["ruff"]), "bandit": keep(sa["bandit"])},
                     "reporte_pruebas": {k: rt[k] for k in ("collected", "passed", "failed", "errors", "fallos")}}
         if agent_name == "release-manager-agent":
             q = verify.quality_facts(ctx)

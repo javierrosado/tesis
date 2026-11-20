@@ -93,6 +93,8 @@ def _f5_detail(agent_name: str, key: str, out: dict, ctx: dict, res: dict) -> tu
     if agent_name == "data-model-agent" and key == "pii_protected":
         bad = [f'{t["nombre"]}.{c["nombre"]}' for t in out.get("tablas", []) for c in t["columnas"] if c["pii"] and not c["enmascarado"]]
         return f"Columnas con datos personales sin enmascarar: {', '.join(bad)}", "tablas[].columnas"
+    if agent_name == "backend-developer-agent" and key == "compiles" and any(l.lstrip().startswith(("def ", "async def ", "import ", "from ")) and not l.startswith(" ") for h in out.get("handlers", []) for l in h["lineas"]):
+        return "lineas es solo el CUERPO del handler: no definas funciones (def), no importes módulos; empieza directamente con la lógica y termina con return", "handlers[].lineas"
     if agent_name == "backend-developer-agent" and key in ("compiles", "smoke_ok"):
         from .tools.sandbox import smoke
         sm = smoke(verify.app_files(ctx, out), ctx.get("api_design", {}))
@@ -111,12 +113,17 @@ def _f5_detail(agent_name: str, key: str, out: dict, ctx: dict, res: dict) -> tu
     if agent_name == "qa-automation-agent" and key == "suite_runs":
         from .tools.sandbox import run_tests
         rt = run_tests(verify.app_files(ctx), out)
-        return f"pytest no pudo recolectar o ejecutar las suites: {'; '.join(f['detalle'] for f in rt['fallos'][:3])}", "suites[].lineas"
+        errs = [f["prueba"] + ": " + f["detalle"][:160] for f in rt["fallos"] if "setup" in f["detalle"] or "Error" in f["detalle"] or f["prueba"] == "<colección>"][:4]
+        return f"Las suites tienen errores propios (fixtures inexistentes, nombres no definidos, sintaxis), no fallos del servicio. Usa solo los fixtures client y db y datos como diccionarios: {'; '.join(errs)}", "suites[].lineas"
     if agent_name == "code-review-agent" and key == "bandit_covered":
         from .tools.sandbox import static_analysis
         sa = static_analysis(verify.app_files(ctx))
         miss = [f'{b["archivo"]}:{b["linea"]} {b["regla"]}' for b in sa["bandit"] if b["severidad"] in ("HIGH", "MEDIUM")]
         return f"Reporta como hallazgo cada problema de bandit HIGH/MEDIUM: {', '.join(miss)}", "hallazgos"
+    if agent_name == "code-review-agent" and key == "findings_in_handlers":
+        from .tools.sandbox import handler_spans
+        sp = verify.app_files(ctx); rng = ", ".join(f"{k}: líneas {a}-{b}" for k, (a, b) in handler_spans(sp).items())
+        return f"Solo se revisan los cuerpos de los handlers (el resto lo genera el sistema). Rangos válidos de app/main.py: {rng}", "hallazgos[].linea"
     if agent_name == "code-review-agent" and key == "verdict_consistent":
         return "veredicto debe ser cambios_requeridos si hay hallazgos criticos o pruebas fallidas, y aprobado en caso contrario", "veredicto"
     if agent_name == "release-manager-agent" and key == "window_valid":

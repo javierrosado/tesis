@@ -219,7 +219,8 @@ def metrics_backend(out: dict, ctx: dict) -> dict:
     hs = {h["endpoint"] for h in out.get("handlers", [])}
     sm = smoke(app_files(ctx, out), ctx.get("api_design", {}))
     res = sm.get("resultados", [])
-    return {"compiles": bool(sm.get("import_ok")),
+    nested = any(l.lstrip().startswith(("def ", "async def ", "import ", "from ")) and not l.startswith(" ") for h in out.get("handlers", []) for l in h["lineas"])
+    return {"compiles": bool(sm.get("import_ok")) and not nested,
             "routes_coverage": (len(set(eps) & hs) / len(eps)) if eps else 0.0,
             "smoke_ok": (sum(1 for r in res if r["status"] < 500) / len(res)) if res else 0.0}
 
@@ -229,26 +230,30 @@ def metrics_qa(out: dict, ctx: dict) -> dict:
     tcs = {c["id"] for c in ctx.get("test_cases", {}).get("casos", [])}
     got = {c for s in out.get("suites", []) for c in s.get("casos", [])}
     rt = run_tests(app_files(ctx), out)
-    return {"tc_coverage": (len(tcs & got) / len(tcs)) if tcs else 1.0, "suite_runs": rt["suite_runs"], "pass_rate": rt["pass_rate"]}
+    return {"tc_coverage": (len(tcs & got) / len(tcs)) if tcs else 1.0, "suite_runs": rt["suite_runs"] and rt["errors"] == 0, "pass_rate": rt["pass_rate"]}
 
 
 def quality_facts(ctx: dict) -> dict:
     """Hechos objetivos de calidad del requerimiento (pruebas reales + hallazgos críticos)."""
     from .tools.sandbox import run_tests
-    rt = run_tests(app_files(ctx), ctx.get("qa_suite", {})) if ctx.get("qa_suite") else {"failed": 0, "errors": 0, "collected": 0}
-    crit = [h for h in ctx.get("code_review", {}).get("hallazgos", []) if h["severidad"] == "critico"]
+    from .tools.sandbox import in_handlers
+    files = app_files(ctx)
+    rt = run_tests(files, ctx.get("qa_suite", {})) if ctx.get("qa_suite") else {"failed": 0, "errors": 0, "collected": 0}
+    crit = [h for h in ctx.get("code_review", {}).get("hallazgos", []) if h["severidad"] == "critico" and in_handlers(files, h["archivo"], h["linea"])]
     return {"pruebas_fallidas": rt.get("failed", 0) + rt.get("errors", 0), "pruebas_total": rt.get("collected", 0), "criticos": len(crit)}
 
 
 def metrics_code_review(out: dict, ctx: dict) -> dict:
-    from .tools.sandbox import static_analysis, run_tests
+    from .tools.sandbox import static_analysis, run_tests, in_handlers
     files = app_files(ctx)
     sa = static_analysis(files)
-    serious = {(b["archivo"], b["linea"]) for b in sa["bandit"] if b["severidad"] in ("HIGH", "MEDIUM")}
+    serious = {(b["archivo"], b["linea"]) for b in sa["bandit"] if b["severidad"] in ("HIGH", "MEDIUM") and in_handlers(files, b["archivo"], b["linea"])}
     found = {(h["archivo"], h["linea"]) for h in out.get("hallazgos", [])}
     rt = run_tests(files, ctx.get("qa_suite", {})) if ctx.get("qa_suite") else {"failed": 0, "errors": 0}
-    must_change = any(h["severidad"] == "critico" for h in out.get("hallazgos", [])) or (rt.get("failed", 0) + rt.get("errors", 0)) > 0
-    return {"bandit_covered": (len(serious & found) / len(serious)) if serious else 1.0,
+    hs = out.get("hallazgos", [])
+    must_change = any(h["severidad"] == "critico" for h in hs) or (rt.get("failed", 0) + rt.get("errors", 0)) > 0
+    return {"findings_in_handlers": (sum(1 for h in hs if in_handlers(files, h["archivo"], h["linea"])) / len(hs)) if hs else 1.0,
+            "bandit_covered": (len(serious & found) / len(serious)) if serious else 1.0,
             "verdict_consistent": 1.0 if (out.get("veredicto") == "cambios_requeridos") == must_change else 0.0}
 
 

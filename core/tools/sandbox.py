@@ -148,7 +148,8 @@ def smoke(files: dict[str, str], api_design: dict) -> dict:
                 elif p["en"] == "header": h[p["nombre"]] = str(v)
             try:
                 r = c.request(e["metodo"], path, params=q, headers=h, json=e["cuerpo"])
-                res.append({{"id": e["id"], "status": r.status_code}})
+                vacia = r.status_code < 300 and r.status_code != 204 and r.content.strip() in (b"null", b"")
+                res.append({{"id": e["id"], "status": 598 if vacia else r.status_code, **({{"error": "respuesta 2xx vacía (el handler no retorna nada)"}} if vacia else {{}})}})
             except Exception as ex:
                 res.append({{"id": e["id"], "status": 599, "error": repr(ex)[:200]}})
         print(json.dumps({{"import_ok": True, "resultados": res}}))
@@ -235,6 +236,30 @@ def static_analysis(files: dict[str, str]) -> dict:
     shutil.rmtree(d, ignore_errors=True)
     _CACHE[k] = res
     return res
+
+
+def handler_spans(files: dict[str, str]) -> dict[str, tuple[int, int]]:
+    """Líneas (1-based, inclusivas) del cuerpo de cada handler en app/main.py: lo único escrito por el agente."""
+    lines = files.get("app/main.py", "").splitlines(); spans = {}
+    for i, l in enumerate(lines):
+        m = re.match(r"def _(ep_\d{3})\(", l)
+        if m:
+            j = i + 1
+            while j < len(lines) and (lines[j].startswith("    ") or not lines[j].strip()) and not lines[j].startswith("@app"):
+                if not lines[j].strip() and j + 1 < len(lines) and not lines[j + 1].startswith("    "):
+                    break
+                j += 1
+            spans["EP-" + m.group(1)[3:]] = (i + 2, j)
+    return spans
+
+
+def handler_code(files: dict[str, str]) -> dict[str, list[str]]:
+    lines = files.get("app/main.py", "").splitlines()
+    return {ep: [f"{n:4d}| {lines[n - 1]}" for n in range(a, b + 1)] for ep, (a, b) in handler_spans(files).items()}
+
+
+def in_handlers(files: dict[str, str], archivo: str, linea: int) -> bool:
+    return archivo == "app/main.py" and any(a <= linea <= b for a, b in handler_spans(files).values())
 
 
 def numbered(files: dict[str, str]) -> dict[str, list[str]]:

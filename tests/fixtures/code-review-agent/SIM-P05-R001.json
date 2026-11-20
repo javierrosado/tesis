@@ -5,9 +5,9 @@
    "id": "FIND-001",
    "severidad": "menor",
    "archivo": "app/main.py",
-   "linea": 1,
+   "linea": 28,
    "regla": "estilo",
-   "descripcion": "el módulo generado no define logging estructurado",
+   "descripcion": "la búsqueda lineal del pedido no registra el acceso con correlation_id",
    "recomendacion": "agregar logging con correlation_id en la siguiente iteración"
   }
  ],

@@ -15,6 +15,7 @@ handoff_to: [cicd-pipeline-agent, release-manager-agent]
 reviewed_by: governance-agent
 verification:
   - {id: schema_valid, rule: "schema_valid == true"}
+  - {id: findings_in_handlers, rule: "findings_in_handlers == 1.0", description: "los hallazgos apuntan al código escrito por backend-developer"}
   - {id: bandit_covered, rule: "bandit_covered == 1.0", description: "todo problema HIGH/MEDIUM de bandit reportado"}
   - {id: verdict_consistent, rule: "verdict_consistent == 1.0", description: "cambios_requeridos si hay críticos o pruebas fallidas"}
   - {id: refinement_rounds, rule: "refinement_rounds <= 1"}

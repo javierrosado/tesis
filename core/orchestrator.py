@@ -5,7 +5,7 @@ riesgo, ejecuta el bucle de calidad (pruebas reales + revisión + remediación) 
 Reanudable: cada artefacto se guarda con su decisión en data/requerimientos/<id>/output/. Si un gate de
 riesgo alto queda pendiente, el requerimiento se detiene (PendingApproval) y la siguiente corrida retoma
 desde ahí leyendo output/aprobaciones/<artefacto>.json (decisión humana con timestamp real)."""
-import hashlib, json, random
+import hashlib, json, os, random
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime, timezone
 from pathlib import Path
@@ -46,6 +46,11 @@ class Scheduled(Exception):
     """El despliegue está programado para una ventana futura (política de release)."""
 
 
+class ModelDeferred(Exception):
+    """El modelo que atiende al agente no se levantó en esta corrida (p. ej. el maestro, D-F4-1 C): el requerimiento
+    se pausa y sigue en la próxima ventana con ese modelo; nunca se sustituye por otro modelo."""
+
+
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
@@ -71,6 +76,9 @@ class Orchestrator:
 
     # ---------- utilidades ----------
     def _port(self, agent):
+        name, _ = self.reg.provider_for(agent.name)
+        if name in [x for x in os.environ.get("PROVIDERS_DOWN", "").split(",") if x]:
+            raise ModelDeferred(f"{agent.name}: {name}")
         return ModelPort(self.reg.adapter_for(agent.name), self.tel, max_retries=2)
 
     def _out_dir(self, req_id: str) -> Path:
@@ -378,6 +386,11 @@ class Orchestrator:
             self._estado(req_id, estado="esperando_aprobacion", pendiente=str(e))
             self.tel.emit(event="pipeline_paused", req_id=req_id, reason="pending_approval", pendiente=str(e))
             ctx["_estado"] = "esperando_aprobacion"
+            return ctx
+        except ModelDeferred as e:
+            self._estado(req_id, estado="esperando_modelo", modelo=str(e))
+            self.tel.emit(event="pipeline_paused", req_id=req_id, reason="model_deferred", modelo=str(e))
+            ctx["_estado"] = "esperando_modelo"
             return ctx
         except Scheduled as e:
             self._estado(req_id, estado="programado", ventana=str(e))

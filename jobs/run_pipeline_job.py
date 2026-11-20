@@ -35,7 +35,11 @@ except Exception as e:  # noqa: BLE001
 # 2) vLLM con el modelo base y los adaptadores
 mods = [f"{a}={snapshot_download(repo)}" for a, repo in (x.split("=") for x in os.environ.get("ADAPTERS", "").split())]
 TEACHER = os.environ.get("TEACHER_MODEL", "Qwen/Qwen3-32B-AWQ")   # D-F4-1 C; TEACHER_MODEL=none lo desactiva
-USE_T = TEACHER.lower() != "none"
+MODE_T = os.environ.get("TEACHER_MODE", "auto")                    # auto: solo si algún requerimiento ya llegó al diseño de API
+USE_T = TEACHER.lower() != "none" and (MODE_T == "always" or any((ROOT / "data/requerimientos" / r / "output" / "api_design.json").exists() for r in reqs))
+if not USE_T:   # los agentes del maestro se difieren a la próxima ventana; nunca se sustituye el modelo
+    os.environ["PROVIDERS_DOWN"] = "vllm_teacher"
+print("maestro:", "sí" if USE_T else "no (diferido)", flush=True)
 cmd = [sys.executable, "-m", "vllm.entrypoints.openai.api_server", "--model", BASE, "--port", "8000", "--max-model-len", "28000",
        "--gpu-memory-utilization", "0.36" if USE_T else "0.90", "--max-num-seqs", "32"]
 if mods:

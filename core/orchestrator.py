@@ -177,7 +177,7 @@ class Orchestrator:
                     meta["gate"] = h; self._save(ctx, name, out, meta)
                     return out
                 feedback0 = [{"severidad": "mayor", "regla": "gate_humano", "detalle": f"devuelto por {h['role']}: {h['motivo']}", "ubicacion": "<raíz>"}]
-        max_rounds = self.reg.dag.get("retry", {}).get("max_governance_rounds", 2)
+        max_rounds = agent.spec.get("max_governance_rounds", self.reg.dag.get("retry", {}).get("max_governance_rounds", 2))
         knowledge, _ = self.rag.context_block(self._queries_for(agent, ctx))
         self.tel.emit(event="handoff", req_id=req_id, to=agent_name, frm=agent.spec.get("consumes_from"), mode="auto")
         feedback = feedback0

@@ -142,10 +142,12 @@ def smoke(files: dict[str, str], api_design: dict) -> dict:
         c = TestClient(app, raise_server_exceptions=True)
         EPS = json.loads({json.dumps(json.dumps(eps, ensure_ascii=False))})
         def sample(name, tipo):
-            for rows in DB.values():
-                for r in rows:
-                    if isinstance(r, dict) and name in r:
-                        return r[name]
+            snake = "".join("_" + ch.lower() if ch.isupper() else ch for ch in name).lstrip("_")
+            for key in (name, snake):
+                for rows in DB.values():
+                    for r in rows:
+                        if isinstance(r, dict) and key in r:
+                            return r[key]
             return {{"integer": 1, "number": 1.0, "boolean": True}}.get(tipo, "1")
         res = []
         for e in EPS:
@@ -158,7 +160,7 @@ def smoke(files: dict[str, str], api_design: dict) -> dict:
             try:
                 r = c.request(e["metodo"], path, params=q, headers=h, json=e["cuerpo"])
                 vacia = r.status_code < 300 and r.status_code != 204 and r.content.strip() in (b"null", b"")
-                res.append({{"id": e["id"], "status": 598 if vacia else r.status_code, **({{"error": "respuesta 2xx vacía (el handler no retorna nada)"}} if vacia else {{}})}})
+                res.append({{"id": e["id"], "status": 598 if vacia else r.status_code, **({{"error": f"respuesta 2xx vacía en {{e['metodo']}} {{path}}: el handler terminó sin return; agrega al final raise HTTPException(status_code=404, ...) para cuando no hay coincidencias"}} if vacia else {{}})}})
             except Exception as ex:
                 res.append({{"id": e["id"], "status": 599, "error": repr(ex)[:200]}})
         print(json.dumps({{"import_ok": True, "resultados": res}}))

@@ -20,3 +20,4 @@ verification:
   - {id: smoke_ok, rule: "smoke_ok >= 0.8", description: "proporción de endpoints que responden sin error 5xx"}
   - {id: refinement_rounds, rule: "refinement_rounds <= 1"}
 gate: {role: tech_lead, artefact: backend_code, sla_hours: 8, delegable: true}
+max_governance_rounds: 4   # el backend se valida ejecutando el servicio (determinista y barato); se permiten más rondas de corrección

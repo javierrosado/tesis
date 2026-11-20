@@ -96,12 +96,15 @@ def _f5_detail(agent_name: str, key: str, out: dict, ctx: dict, res: dict) -> tu
     if agent_name == "backend-developer-agent" and key == "compiles" and any(l.lstrip().startswith(("def ", "async def ", "import ", "from ")) and not l.startswith(" ") for h in out.get("handlers", []) for l in h["lineas"]):
         return "lineas es solo el CUERPO del handler: no definas funciones (def), no importes módulos; empieza directamente con la lógica y termina con return", "handlers[].lineas"
     if agent_name == "backend-developer-agent" and key in ("compiles", "smoke_ok"):
-        from .tools.sandbox import smoke
+        from .tools.sandbox import smoke, signatures as sandbox_signatures
         sm = smoke(verify.app_files(ctx, out), ctx.get("api_design", {}))
         if not sm.get("import_ok"):
             hint = " Escribe todo texto Python (claves, tablas, mensajes, estados) entre comillas SIMPLES, p. ej. DB['pedido'], detail='no encontrado'." if "SyntaxError" in str(sm.get("error", "")) else ""
             return f"El servicio no se puede importar: {sm.get('error', '')}.{hint}", "handlers[].lineas"
-        bad = [f'{r["id"]}→{r["status"]}{(" " + r["error"]) if r.get("error") else ""}' for r in sm.get("resultados", []) if r["status"] >= 500]
+        firmas = sandbox_signatures(ctx.get("api_design", {}))
+        bad = [f'{r["id"]}→{r["status"]}{(" " + r["error"]) if r.get("error") else ""}'
+               + (f' (en {r["id"]} solo existen los parámetros de: {firmas.get(r["id"], "")})' if "NameError" in str(r.get("error", "")) else "")
+               for r in sm.get("resultados", []) if r["status"] >= 500]
         return f"Endpoints que responden error 5xx con datos de ejemplo (revisa nombres de tablas/columnas de DB, variables y que todo texto vaya entre comillas simples): {'; '.join(bad)}", "handlers"
     if agent_name == "backend-developer-agent" and key == "routes_coverage":
         eps = [e["id"] for e in ctx.get("api_design", {}).get("endpoints", [])]

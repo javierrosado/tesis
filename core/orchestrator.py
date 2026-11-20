@@ -83,8 +83,10 @@ class Orchestrator:
                 f"## Esquema de salida (JSON Schema)\n```json\n{json.dumps(agent.output_schema, ensure_ascii=False)}\n```")
         msgs = [{"role": "system", "content": agent.prompt}, {"role": "user", "content": user}]
         if feedback:
+            reglas = "\n".join(f"- {v['id']}: {v['rule']}" + (f" ({v['description']})" if v.get("description") else "") for v in agent.verification if v["id"] != "refinement_rounds")
             msgs.append({"role": "user", "content": "Hallazgos de gobernanza sobre tu versión anterior; corrígelos todos:\n"
-                                                    + json.dumps(feedback, ensure_ascii=False, indent=1)})
+                                                    + json.dumps(feedback, ensure_ascii=False, indent=1)
+                                                    + "\n\nDevuelve el artefacto COMPLETO corregido y verifica que siga cumpliendo TODOS los criterios, no solo los señalados:\n" + reglas})
         return msgs
 
     def _queries_for(self, agent, ctx: dict) -> list[str]:
@@ -201,7 +203,16 @@ class Orchestrator:
                     continue
                 return out
             feedback = verdict["hallazgos"]
-        self.tel.emit(event="escalation", req_id=req_id, agent=agent_name, round=max_rounds, to=self.reg.gates["escalation"]["to"], reason="max_rounds")
+        self.tel.emit(event="escalation", req_id=req_id, agent=agent_name, round=max_rounds, to=agent.gate["role"] if agent.gate else "tech_lead", reason="max_rounds")
+        if self.reg.gates.get("mode") == "manual" and agent.gate:
+            # Escalamiento (F3 de cada ficha): el humano decide sobre la última versión con los hallazgos a la vista
+            req = {"artefacto": name, "rol": agent.gate["role"], "hash": _hash(out), "solicitado": _now(), "agente": agent_name,
+                   "escalado": True, "hallazgos_governance": verdict["hallazgos"]}
+            pend = self._out_dir(req_id) / "pendientes"; pend.mkdir(exist_ok=True)
+            (pend / f"{name}.json").write_text(json.dumps(req, ensure_ascii=False, indent=1), encoding="utf-8")
+            gate = {"decision": "pending", "role": agent.gate["role"], "by": "human", "riesgo": "escalado", "hash": req["hash"], "solicitado": req["solicitado"]}
+            self._save(ctx, name, out, {"verdict": verdict, "f5": f5, "gate": gate, "model": stats, "rounds": max_rounds, "escalado": True})
+            raise PendingApproval(f"{req_id}/{name} (escalado)")
         raise ContractError(f"{agent_name}/{req_id}: rechazado por gobernanza {max_rounds + 1} veces")
 
     @staticmethod

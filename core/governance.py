@@ -8,6 +8,8 @@ Reglas, en orden:
   3. Procedencia — provenance coherente con el requerimiento y el agente; knowledge_refs no vacío (mayor).
 Veredicto: rechazado si hay hallazgos bloqueantes o mayores; aprobado en otro caso. El escalamiento
 lo decide el orquestador al agotar las rondas (max_governance_rounds)."""
+import json
+
 import jsonschema
 from . import verify
 
@@ -105,6 +107,12 @@ def _f5_detail(agent_name: str, key: str, out: dict, ctx: dict, res: dict) -> tu
         bad = [f'{r["id"]}→{r["status"]}{(" " + r["error"]) if r.get("error") else ""}'
                + (f' (en {r["id"]} solo existen los parámetros de: {firmas.get(r["id"], "")})' if "NameError" in str(r.get("error", "")) else "")
                for r in sm.get("resultados", []) if r["status"] >= 500]
+        errs = " ".join(str(r.get("error", "")) for r in sm.get("resultados", []))
+        if "KeyError" in errs:
+            tabs = {t["nombre"]: [c["nombre"] for c in t["columnas"]] for t in ctx.get("data_model", {}).get("tablas", [])}
+            bad.append(f"KeyError: en DB solo existen estas tablas y columnas: {json.dumps(tabs, ensure_ascii=False)}; los campos del cuerpo llegan con los nombres del diseño (body['campo'])")
+        if "isoformat" in errs:
+            bad.append("Las fechas guardadas en DB son texto ISO (str): devuélvelas tal cual; usa datetime.now().isoformat() solo para fechas nuevas")
         return f"Endpoints que responden error 5xx con datos de ejemplo (revisa nombres de tablas/columnas de DB, variables y que todo texto vaya entre comillas simples): {'; '.join(bad)}", "handlers"
     if agent_name == "backend-developer-agent" and key == "routes_coverage":
         eps = [e["id"] for e in ctx.get("api_design", {}).get("endpoints", [])]

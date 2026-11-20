@@ -231,7 +231,11 @@ def metrics_qa(out: dict, ctx: dict) -> dict:
     tcs = {c["id"] for c in ctx.get("test_cases", {}).get("casos", [])}
     got = {c for s in out.get("suites", []) for c in s.get("casos", [])}
     rt = run_tests(app_files(ctx), out)
-    return {"tc_coverage": (len(tcs & got) / len(tcs)) if tcs else 1.0, "suite_runs": rt["suite_runs"] and rt["errors"] == 0, "pass_rate": rt["pass_rate"]}
+    propios = [f for f in rt["fallos"] if QA_OWN_ERROR.search(f["detalle"])]   # la prueba falla por su propio código, no por el servicio
+    return {"tc_coverage": (len(tcs & got) / len(tcs)) if tcs else 1.0, "suite_runs": rt["suite_runs"] and rt["errors"] == 0 and not propios, "pass_rate": rt["pass_rate"]}
+
+
+QA_OWN_ERROR = re.compile(r"ModuleNotFoundError|ImportError|NameError|SyntaxError|fixture '[^']+' not found")
 
 
 def quality_facts(ctx: dict) -> dict:

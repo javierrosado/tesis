@@ -125,8 +125,9 @@ def _f5_detail(agent_name: str, key: str, out: dict, ctx: dict, res: dict) -> tu
     if agent_name == "qa-automation-agent" and key == "suite_runs":
         from .tools.sandbox import run_tests
         rt = run_tests(verify.app_files(ctx), out)
-        errs = [f["prueba"] + ": " + f["detalle"][:160] for f in rt["fallos"] if "setup" in f["detalle"] or "Error" in f["detalle"] or f["prueba"] == "<colección>"][:4]
-        return f"Las suites tienen errores propios (fixtures inexistentes, nombres no definidos, sintaxis), no fallos del servicio. Usa solo los fixtures client y db y datos como diccionarios: {'; '.join(errs)}", "suites[].lineas"
+        errs = [f["prueba"] + ": " + f["detalle"][:160] for f in rt["fallos"] if "setup" in f["detalle"] or verify.QA_OWN_ERROR.search(f["detalle"]) or f["prueba"] == "<colección>"][:4]
+        return (f"Las suites tienen errores propios (módulos inexistentes, fixtures inexistentes, nombres no definidos, sintaxis), no fallos del servicio. "
+                f"El servicio solo expone su API HTTP en app.main: prueba todo (también los casos unitarios) llamando a los endpoints con client, y usa solo los fixtures client y db: {'; '.join(errs)}"), "suites[].lineas"
     if agent_name == "code-review-agent" and key == "bandit_covered":
         from .tools.sandbox import static_analysis
         sa = static_analysis(verify.app_files(ctx))

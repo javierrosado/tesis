@@ -37,6 +37,7 @@ def calcular(events: list[dict]) -> dict:
     ag = defaultdict(lambda: {"llamadas": 0, "tin": [], "tout": [], "lat": [], "r0_ok": 0, "evaluados": 0, "rondas": [], "escal": 0, "clase": "?"})
     f5_by = defaultdict(dict)   # (req, agent) -> {round: ok}
     req = defaultdict(lambda: {"inicio": None, "fin": None, "gates": 0, "gates_humanos": 0, "espera_h": 0.0, "defectos": 0, "remediaciones": 0, "estado": None})
+    hai = {"con_dictamen": 0, "coinciden": 0, "devueltos_humano": 0, "devueltos_ia": 0}   # concordancia humano–IA (opción A)
     for e in events:
         ev, a, r = e["event"], e.get("agent"), e.get("req_id")
         if ev == "agent_completed":
@@ -50,6 +51,9 @@ def calcular(events: list[dict]) -> dict:
             q = req[r]; q["gates"] += 1
             if not e.get("delegated") and e.get("by") not in ("politica_riesgo_bajo", None):
                 q["gates_humanos"] += 1; q["espera_h"] += float(e.get("delay_h") or 0)
+                if e.get("dictamen_ia"):
+                    hai["con_dictamen"] += 1; hai["coinciden"] += int(bool(e.get("coincide_con_ia")))
+                    hai["devueltos_humano"] += int(e.get("decision") == "returned"); hai["devueltos_ia"] += int(e["dictamen_ia"] == "returned")
         elif ev == "defect_detected":
             req[r]["defectos"] += 1
         elif ev == "remediation":
@@ -78,7 +82,8 @@ def calcular(events: list[dict]) -> dict:
         por_clase[f["clase"]].append(f)
     resumen = {c: {"agentes": len(fs), "aprob_r0_%": round(st.mean([f["aprob_r0_%"] for f in fs if f["aprob_r0_%"] is not None]), 1),
                    "escalamientos": sum(f["escalamientos"] for f in fs)} for c, fs in por_clase.items()}
-    return {"agentes": filas, "por_clase": resumen, "requerimientos": dict(req)}
+    hai["concordancia_%"] = round(100 * hai["coinciden"] / hai["con_dictamen"], 1) if hai["con_dictamen"] else None
+    return {"agentes": filas, "por_clase": resumen, "requerimientos": dict(req), "humano_ia": hai}
 
 
 def a_markdown(res: dict) -> str:
@@ -92,6 +97,9 @@ def a_markdown(res: dict) -> str:
     out += ["", "## Por requerimiento", "", "| Req. | Gates | Gates humanos | Espera humana (h) | Defectos | Remediaciones | Estado |", "|---|---|---|---|---|---|---|"]
     for r, q in sorted(res["requerimientos"].items()):
         out.append(f"| {r} | {q['gates']} | {q['gates_humanos']} | {round(q['espera_h'], 2)} | {q['defectos']} | {q['remediaciones']} | {q['estado'] or '—'} |")
+    h = res["humano_ia"]
+    out += ["", "## Gates humanos con dictamen de IA (opción A)", "", "| Decisiones con dictamen | Concordancia (%) | Devueltos por el humano | Devolución recomendada por IA |", "|---|---|---|---|",
+            f"| {h['con_dictamen']} | {h['concordancia_%']} | {h['devueltos_humano']} | {h['devueltos_ia']} |"]
     return "\n".join(out) + "\n"
 
 

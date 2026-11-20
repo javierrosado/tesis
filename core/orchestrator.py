@@ -149,7 +149,8 @@ class Orchestrator:
             return None                                   # la aprobación corresponde a otra versión del artefacto
         t0 = datetime.fromisoformat(meta_gate["solicitado"]); t1 = datetime.fromisoformat(a["ts"])
         return {"decision": a["decision"], "role": meta_gate["role"], "by": a.get("por", "humano"), "riesgo": "alto",
-                "motivo": a.get("motivo", ""), "ts": a["ts"], "delay_h": round((t1 - t0).total_seconds() / 3600, 2)}
+                "motivo": a.get("motivo", ""), "ts": a["ts"], "delay_h": round((t1 - t0).total_seconds() / 3600, 2),
+                "ventana": a.get("ventana"), "dictamen_ia": (a.get("dictamen_ia") or {}).get("recomendacion"), "coincide_con_ia": a.get("coincide_con_ia")}
 
     # ---------- nodo = agente + governance + gate ----------
     def _load(self, req_id: str, name: str):

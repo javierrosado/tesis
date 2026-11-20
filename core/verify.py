@@ -146,8 +146,9 @@ def workflow_errors(p: dict) -> list[str]:
         for n in j.get("needs", []):
             if n not in ids or n == j["id"]:
                 errs.append(f"{p['id']}/{j['id']}: needs '{n}' no es otro job del pipeline")
-        if any("pytest" in (s.get("run") or "") for s in j["steps"]) and not any((s.get("uses") or "").startswith("actions/checkout@") for s in j["steps"]):
-            errs.append(f"{p['id']}/{j['id']}: el job que ejecuta pytest debe hacer checkout del código en sus propios pasos (cada job corre en una máquina nueva)")
+        uses_repo = any(re.search(r"pytest|\./|requirements|deploy|uvicorn|python ", s.get("run") or "") for s in j["steps"])
+        if uses_repo and not any((s.get("uses") or "").startswith("actions/checkout@") for s in j["steps"]):
+            errs.append(f"{p['id']}/{j['id']}: el job que ejecuta código o scripts del repositorio (pytest, ./deploy.sh, pip -r) debe hacer checkout en sus propios pasos (cada job corre en una máquina nueva)")
         for s in j["steps"]:
             if s.get("uses") and s["uses"].split("@")[0] not in ALLOWED_ACTIONS:
                 errs.append(f"{p['id']}/{j['id']}: la acción {s['uses']} no está en la lista verificada ({', '.join(sorted(ALLOWED_ACTIONS))})")

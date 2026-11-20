@@ -30,6 +30,10 @@
      "environment": "dev",
      "steps": [
       {
+       "nombre": "checkout",
+       "uses": "actions/checkout@v4"
+      },
+      {
        "nombre": "Desplegar",
        "run": "./deploy.sh dev"
       }
@@ -80,6 +84,10 @@
      "environment": "staging",
      "steps": [
       {
+       "nombre": "checkout",
+       "uses": "actions/checkout@v4"
+      },
+      {
        "nombre": "Desplegar",
        "run": "./deploy.sh staging"
       }
@@ -129,6 +137,10 @@
      ],
      "environment": "prod",
      "steps": [
+      {
+       "nombre": "checkout",
+       "uses": "actions/checkout@v4"
+      },
       {
        "nombre": "Desplegar",
        "run": "./deploy.sh prod"

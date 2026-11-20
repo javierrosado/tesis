@@ -130,7 +130,7 @@ def smoke(files: dict[str, str], api_design: dict) -> dict:
             from app.main import app, DB
         except Exception as e:
             print(json.dumps({{"import_ok": False, "error": repr(e)[:300]}})); sys.exit(0)
-        c = TestClient(app, raise_server_exceptions=False)
+        c = TestClient(app, raise_server_exceptions=True)
         EPS = json.loads({json.dumps(json.dumps(eps, ensure_ascii=False))})
         def sample(name, tipo):
             for rows in DB.values():
@@ -182,7 +182,7 @@ def db():
 
 @pytest.fixture
 def client(db):
-    return TestClient(app, raise_server_exceptions=False)
+    return TestClient(app, raise_server_exceptions=True)
 '''
 
 

@@ -99,9 +99,10 @@ def _f5_detail(agent_name: str, key: str, out: dict, ctx: dict, res: dict) -> tu
         from .tools.sandbox import smoke
         sm = smoke(verify.app_files(ctx, out), ctx.get("api_design", {}))
         if not sm.get("import_ok"):
-            return f"El servicio no se puede importar: {sm.get('error', '')}", "handlers[].lineas"
+            hint = " Escribe todo texto Python (claves, tablas, mensajes, estados) entre comillas SIMPLES, p. ej. DB['pedido'], detail='no encontrado'." if "SyntaxError" in str(sm.get("error", "")) else ""
+            return f"El servicio no se puede importar: {sm.get('error', '')}.{hint}", "handlers[].lineas"
         bad = [f'{r["id"]}→{r["status"]}{(" " + r["error"]) if r.get("error") else ""}' for r in sm.get("resultados", []) if r["status"] >= 500]
-        return f"Endpoints que responden error 5xx con datos de ejemplo (revisa nombres de tablas/columnas de DB y variables): {'; '.join(bad)}", "handlers"
+        return f"Endpoints que responden error 5xx con datos de ejemplo (revisa nombres de tablas/columnas de DB, variables y que todo texto vaya entre comillas simples): {'; '.join(bad)}", "handlers"
     if agent_name == "backend-developer-agent" and key == "routes_coverage":
         eps = [e["id"] for e in ctx.get("api_design", {}).get("endpoints", [])]
         hs = {h["endpoint"] for h in out.get("handlers", [])}

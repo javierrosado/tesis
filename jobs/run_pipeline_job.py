@@ -34,8 +34,10 @@ except Exception as e:  # noqa: BLE001
 
 # 2) vLLM con el modelo base y los adaptadores
 mods = [f"{a}={snapshot_download(repo)}" for a, repo in (x.split("=") for x in os.environ.get("ADAPTERS", "").split())]
+TEACHER = os.environ.get("TEACHER_MODEL", "Qwen/Qwen3-32B-AWQ")   # D-F4-1 C; TEACHER_MODEL=none lo desactiva
+USE_T = TEACHER.lower() != "none"
 cmd = [sys.executable, "-m", "vllm.entrypoints.openai.api_server", "--model", BASE, "--port", "8000", "--max-model-len", "28000",
-       "--gpu-memory-utilization", "0.90", "--max-num-seqs", "32"]
+       "--gpu-memory-utilization", "0.36" if USE_T else "0.90", "--max-num-seqs", "32"]
 if mods:
     cmd += ["--enable-lora", "--max-lora-rank", "64", "--max-loras", str(len(mods)), "--lora-modules", *mods]
 srv = subprocess.Popen(cmd, stdout=open("/tmp/vllm.log", "w"), stderr=subprocess.STDOUT)
@@ -47,6 +49,18 @@ for _ in range(180):
             print(open("/tmp/vllm.log").read()[-4000:]); sys.exit("vLLM no arrancó")
         time.sleep(10)
 print("vLLM listo con", len(mods), "adaptadores", flush=True)
+if USE_T:   # segundo servidor: maestro para backend / QA / code-review (config/providers.yaml → vllm_teacher)
+    tsrv = subprocess.Popen([sys.executable, "-m", "vllm.entrypoints.openai.api_server", "--model", TEACHER, "--port", "8001",
+                             "--max-model-len", "28000", "--gpu-memory-utilization", "0.54", "--max-num-seqs", "16"],
+                            stdout=open("/tmp/vllm_t.log", "w"), stderr=subprocess.STDOUT)
+    for _ in range(180):
+        try:
+            urllib.request.urlopen("http://localhost:8001/health", timeout=5); break
+        except Exception:  # noqa: BLE001
+            if tsrv.poll() is not None:
+                print(open("/tmp/vllm_t.log").read()[-4000:]); sys.exit("vLLM maestro no arrancó")
+            time.sleep(10)
+    print("vLLM maestro listo:", TEACHER, flush=True)
 os.environ["PIPELINE_PROVIDER"] = "vllm_local"
 
 from core.orchestrator import Orchestrator   # noqa: E402

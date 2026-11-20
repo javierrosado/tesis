@@ -61,6 +61,8 @@ class Registry:
     def provider_for(self, agent_name: str) -> tuple[str, dict]:
         ov = (self.providers_cfg.get("overrides") or {}).get(agent_name, {})
         name = ov.get("provider") or os.environ.get("PIPELINE_PROVIDER") or self.providers_cfg["default"]
+        if ov.get("switch_to") and name == ov.get("for_provider"):   # D-F4-1 C: el agente pasa a otro servidor del mismo job
+            return ov["switch_to"], dict(self.providers_cfg["providers"][ov["switch_to"]])
         cfg = dict(self.providers_cfg["providers"][name])
         if ov.get("model") and name == ov.get("for_provider", name):   # p. ej. vllm_local: nombre del módulo LoRA servido por vLLM
             cfg["model"] = ov["model"]

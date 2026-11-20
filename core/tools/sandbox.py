@@ -74,7 +74,7 @@ def render_app(api_design: dict, data_model: dict, backend: dict) -> dict[str, s
            "from typing import Any, Optional  # noqa: F401",
            "from fastapi import Body, FastAPI, Header, HTTPException, Query, Response  # noqa: F401", "",
            f'app = FastAPI(title={json.dumps(api_design.get("titulo_api", "API"), ensure_ascii=False)}, version={json.dumps(api_design.get("version_api", "v1"))})',
-           f"DB: dict = {json.dumps(db, ensure_ascii=False, indent=1)}", "", ""]
+           "import json as _json", f"DB: dict = _json.loads({json.dumps(json.dumps(db, ensure_ascii=False))})", "", ""]
     for ep in api_design.get("endpoints", []):
         fn = ep["id"].replace("-", "_").lower()
         params, call = [], []

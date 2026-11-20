@@ -186,7 +186,10 @@ class Orchestrator:
             self._stamp_provenance(agent, out, req_id)
             verdict, ok_f5, f5 = self._review(agent, out, ctx, round_)
             if verdict["veredicto"] == "rechazado":
-                self.rejections.append({"agent": agent_name, "req_id": req_id, "round": round_, "hallazgos": verdict["hallazgos"], "output": out})
+                rj = {"agent": agent_name, "req_id": req_id, "round": round_, "ts": _now(), "hallazgos": verdict["hallazgos"], "output": out}
+                self.rejections.append(rj)
+                with (self._out_dir(req_id) / "rechazos.jsonl").open("a", encoding="utf-8") as fh:
+                    fh.write(json.dumps(rj, ensure_ascii=False) + "\n")
             self.tel.emit(event="f5_check", req_id=req_id, agent=agent_name, round=round_, ok=ok_f5, metrics=f5)
             if verdict["veredicto"] == "aprobado":
                 if defer_gate:

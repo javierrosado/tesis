@@ -28,7 +28,7 @@ try:
     for r in reqs:
         src = st / "piloto" / PILOT / "estado" / r
         if src.exists():
-            subprocess.run(["cp", "-r", f"{src}/output", str(ROOT / "data/requerimientos" / r)], check=False)
+            subprocess.run(["cp", "-rL", f"{src}/output", str(ROOT / "data/requerimientos" / r)], check=False)
 except Exception as e:  # noqa: BLE001
     print("sin estado previo:", str(e)[:120])
 

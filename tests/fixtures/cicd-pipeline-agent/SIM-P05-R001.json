@@ -1,0 +1,182 @@
+{
+ "req_id": "SIM-P05-R001",
+ "pipelines": [
+  {
+   "id": "PIPE-001",
+   "ambiente": "dev",
+   "disparador": "push",
+   "jobs": [
+    {
+     "id": "test",
+     "runs_on": "ubuntu-latest",
+     "needs": [],
+     "steps": [
+      {
+       "nombre": "Checkout",
+       "uses": "actions/checkout@v4"
+      },
+      {
+       "nombre": "Pruebas",
+       "run": "pip install -r requirements.txt && pytest -q"
+      }
+     ]
+    },
+    {
+     "id": "deploy",
+     "runs_on": "ubuntu-latest",
+     "needs": [
+      "test"
+     ],
+     "environment": "dev",
+     "steps": [
+      {
+       "nombre": "Desplegar",
+       "run": "./deploy.sh dev"
+      }
+     ]
+    }
+   ],
+   "gates": [
+    {
+     "id": "GATE-001",
+     "etapa": "test",
+     "tipo": "automatica",
+     "criterio": "pytest sin fallos y cobertura ≥ 80 %"
+    },
+    {
+     "id": "GATE-002",
+     "etapa": "deploy",
+     "tipo": "automatica",
+     "criterio": "smoke test exitoso"
+    }
+   ]
+  },
+  {
+   "id": "PIPE-002",
+   "ambiente": "staging",
+   "disparador": "push",
+   "jobs": [
+    {
+     "id": "test",
+     "runs_on": "ubuntu-latest",
+     "needs": [],
+     "steps": [
+      {
+       "nombre": "Checkout",
+       "uses": "actions/checkout@v4"
+      },
+      {
+       "nombre": "Pruebas",
+       "run": "pip install -r requirements.txt && pytest -q"
+      }
+     ]
+    },
+    {
+     "id": "deploy",
+     "runs_on": "ubuntu-latest",
+     "needs": [
+      "test"
+     ],
+     "environment": "staging",
+     "steps": [
+      {
+       "nombre": "Desplegar",
+       "run": "./deploy.sh staging"
+      }
+     ]
+    }
+   ],
+   "gates": [
+    {
+     "id": "GATE-003",
+     "etapa": "test",
+     "tipo": "automatica",
+     "criterio": "pytest sin fallos y cobertura ≥ 80 %"
+    },
+    {
+     "id": "GATE-004",
+     "etapa": "deploy",
+     "tipo": "automatica",
+     "criterio": "smoke test exitoso"
+    }
+   ]
+  },
+  {
+   "id": "PIPE-003",
+   "ambiente": "prod",
+   "disparador": "workflow_dispatch",
+   "jobs": [
+    {
+     "id": "test",
+     "runs_on": "ubuntu-latest",
+     "needs": [],
+     "steps": [
+      {
+       "nombre": "Checkout",
+       "uses": "actions/checkout@v4"
+      },
+      {
+       "nombre": "Pruebas",
+       "run": "pip install -r requirements.txt && pytest -q"
+      }
+     ]
+    },
+    {
+     "id": "deploy",
+     "runs_on": "ubuntu-latest",
+     "needs": [
+      "test"
+     ],
+     "environment": "prod",
+     "steps": [
+      {
+       "nombre": "Desplegar",
+       "run": "./deploy.sh prod"
+      }
+     ]
+    }
+   ],
+   "gates": [
+    {
+     "id": "GATE-005",
+     "etapa": "test",
+     "tipo": "automatica",
+     "criterio": "pytest sin fallos y cobertura ≥ 80 %"
+    },
+    {
+     "id": "GATE-006",
+     "etapa": "deploy",
+     "tipo": "manual",
+     "criterio": "aprobación del Release Manager en día de release permitido"
+    }
+   ]
+  }
+ ],
+ "promocion": [
+  {
+   "desde": "dev",
+   "hacia": "staging",
+   "criterio": "pipeline dev en verde"
+  },
+  {
+   "desde": "staging",
+   "hacia": "prod",
+   "criterio": "smoke test en staging y ventana de release vigente"
+  }
+ ],
+ "provenance": {
+  "contract_version": "1.0",
+  "req_id": "SIM-P05-R001",
+  "agent": "cicd-pipeline",
+  "phase": "devops",
+  "inputs": [
+   "solution_architecture",
+   "api_design",
+   "test_cases"
+  ],
+  "knowledge_refs": [
+   "politica_release"
+  ],
+  "assumptions": []
+ }
+}

@@ -2,7 +2,7 @@
 # requires-python = ">=3.11"
 # dependencies = [
 #   "torch", "transformers>=4.51,<4.57", "accelerate", "bitsandbytes",
-#   "outlines==0.1.11", "datasets", "jsonschema", "PyYAML", "huggingface_hub",
+#   "outlines==0.1.11", "datasets", "jsonschema", "openapi-spec-validator", "PyYAML", "huggingface_hub",
 # ]
 # ///
 """F1-smoke: vertical Discovery con Qwen3-8B (hf_local) sobre 1 requerimiento, en HF Jobs.

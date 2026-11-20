@@ -23,7 +23,13 @@ class ModelPort:
         last_err, totals = None, {"tokens_in": 0, "tokens_out": 0, "latency_ms": 0, "attempts": 0}
         for attempt in range(self.max_retries + 1):
             route = {"role": "system", "name": "__route", "content": "", "agent": agent.name, "req_id": req_id, "attempt": attempt, "variant": variant}
-            r = self.adapter.complete([route] + messages, schema, tools)
+            try:
+                r = self.adapter.complete([route] + messages, schema, tools)
+            except json.JSONDecodeError as e:          # p. ej. salida truncada por max_new_tokens
+                last_err = f"salida truncada o JSON inválido: {e}"[:300]
+                self.telemetry.emit(event="contract_rejected", agent=agent.name, req_id=req_id, attempt=attempt,
+                                    provider=self.adapter.name, model_id=None, error=last_err)
+                continue
             totals["tokens_in"] += r.tokens_in; totals["tokens_out"] += r.tokens_out
             totals["latency_ms"] += r.latency_ms; totals["attempts"] = attempt + 1
             try:

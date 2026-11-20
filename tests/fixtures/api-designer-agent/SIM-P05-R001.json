@@ -1,0 +1,86 @@
+{
+ "req_id": "SIM-P05-R001",
+ "titulo_api": "Seguimiento de pedidos",
+ "version_api": "v1",
+ "endpoints": [
+  {
+   "id": "EP-001",
+   "metodo": "GET",
+   "ruta": "/v1/pedidos/{pedidoId}/estado",
+   "resumen": "Obtiene el estado actual y la fecha estimada de entrega",
+   "integraciones": [
+    "INT-002"
+   ],
+   "seguridad": "SEC-SCHEME-001",
+   "parametros": [
+    {
+     "nombre": "pedidoId",
+     "en": "path",
+     "requerido": true,
+     "tipo": "string"
+    }
+   ],
+   "respuestas": [
+    {
+     "status": 200,
+     "descripcion": "Estado actual del pedido",
+     "esquema": "EstadoPedido"
+    }
+   ],
+   "errores": [
+    "ERR-001"
+   ]
+  }
+ ],
+ "esquemas": [
+  {
+   "nombre": "EstadoPedido",
+   "propiedades": [
+    {
+     "nombre": "pedidoId",
+     "tipo": "string",
+     "requerido": true
+    },
+    {
+     "nombre": "estado",
+     "tipo": "string",
+     "requerido": true
+    },
+    {
+     "nombre": "fechaEstimadaEntrega",
+     "tipo": "string",
+     "requerido": false
+    }
+   ]
+  }
+ ],
+ "errores": [
+  {
+   "id": "ERR-001",
+   "status": 404,
+   "title": "Pedido no encontrado",
+   "type": "https://errores.empresa/pedido-no-encontrado"
+  }
+ ],
+ "esquemas_seguridad": [
+  {
+   "id": "SEC-SCHEME-001",
+   "tipo": "jwt_bearer",
+   "descripcion": "token de la consultora con claim consultoraId"
+  }
+ ],
+ "provenance": {
+  "contract_version": "1.0",
+  "req_id": "SIM-P05-R001",
+  "agent": "api-designer",
+  "phase": "ingenieria",
+  "inputs": [
+   "solution_architecture",
+   "domain_model"
+  ],
+  "knowledge_refs": [
+   "ADR-004"
+  ],
+  "assumptions": []
+ }
+}

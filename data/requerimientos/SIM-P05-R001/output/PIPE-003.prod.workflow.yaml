@@ -1,0 +1,19 @@
+name: PIPE-003 prod
+'on':
+  workflow_dispatch: {}
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+    - name: Pruebas
+      run: pip install -r requirements.txt && pytest -q
+  deploy:
+    runs-on: ubuntu-latest
+    needs:
+    - test
+    environment: prod
+    steps:
+    - name: Desplegar
+      run: ./deploy.sh prod

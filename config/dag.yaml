@@ -1,7 +1,9 @@
-# DAG del vertical Discovery (F3 handoffs). Los nodos de un mismo "parallel" corren a la vez.
-# Cada agente pasa por governance antes de que su artefacto esté disponible para el siguiente.
-version: "1.0"
-pipeline: discovery-vertical
+# DAG del pipeline (F3 handoffs). Los nodos de un mismo "parallel" corren a la vez.
+# Cada agente pasa por governance (determinista) y por su gate humano (RACI) antes de que su artefacto
+# esté disponible para el siguiente. Vertical extendido (F2-A): Discovery → Arquitectura → Ingeniería → Calidad → DevOps,
+# con el agente entrenable de cada dominio.
+version: "1.1"
+pipeline: pipeline-cinco-dominios
 stages:
   - id: intake
     agent: null
@@ -13,18 +15,16 @@ stages:
     gate: product_owner
   - id: fanout
     parallel:
-      - id: domain
-        agent: domain-modeling-agent
-        inputs: [stories]
-        review: governance-agent
-        gate: tech_lead
-      - id: ux
-        agent: ux-ui-copilot-agent
-        inputs: [stories]
-        review: governance-agent
-        gate: product_owner
-  - id: discovery_done
-    action: emit_handoff               # publica artefactos para el dominio Arquitectura
-    inputs: [domain, ux]
+      - {id: domain, agent: domain-modeling-agent, inputs: [stories], review: governance-agent, gate: tech_lead}
+      - {id: ux, agent: ux-ui-copilot-agent, inputs: [stories], review: governance-agent, gate: product_owner}
+  - {id: discovery_done, action: emit_handoff, from: discovery, to: arquitectura, inputs: [stories, domain, ux]}
+  - {id: architecture, agent: solution-architect-agent, inputs: [stories, domain, ux], review: governance-agent, gate: tech_lead}
+  - {id: architecture_done, action: emit_handoff, from: arquitectura, to: ingenieria, inputs: [architecture]}
+  - {id: api, agent: api-designer-agent, inputs: [architecture, domain], review: governance-agent, gate: api_architect}
+  - {id: engineering_done, action: emit_handoff, from: ingenieria, to: calidad, inputs: [api]}
+  - {id: tests, agent: test-case-generator-agent, inputs: [stories, api], review: governance-agent, gate: qa_lead}
+  - {id: quality_done, action: emit_handoff, from: calidad, to: devops, inputs: [tests]}
+  - {id: cicd, agent: cicd-pipeline-agent, inputs: [architecture, api, tests], review: governance-agent, gate: devops_engineer}
+  - {id: devops_done, action: emit_handoff, from: devops, to: release, inputs: [cicd]}
 retry:
   max_governance_rounds: 2             # tras 2 rechazos → escalar a humano

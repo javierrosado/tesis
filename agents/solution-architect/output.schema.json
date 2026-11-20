@@ -1,0 +1,213 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "agents/solution-architect/output.schema.json",
+ "title": "SolutionArchitecture",
+ "description": "Salida de solution-architect-agent (Tabla 15): ADRs, componentes por bounded context, integraciones, patrones y requisitos de seguridad.",
+ "type": "object",
+ "required": [
+  "req_id",
+  "adrs",
+  "componentes",
+  "integraciones",
+  "patrones",
+  "requisitos_seguridad",
+  "provenance"
+ ],
+ "properties": {
+  "req_id": {
+   "type": "string"
+  },
+  "adrs": {
+   "type": "array",
+   "items": {
+    "type": "object",
+    "required": [
+     "id",
+     "titulo",
+     "contexto",
+     "opciones",
+     "decision",
+     "consecuencias"
+    ],
+    "properties": {
+     "id": {
+      "type": "string",
+      "pattern": "^ADR-1[0-9]{2}$"
+     },
+     "titulo": {
+      "type": "string",
+      "minLength": 5
+     },
+     "contexto": {
+      "type": "string",
+      "minLength": 10
+     },
+     "opciones": {
+      "type": "array",
+      "items": {
+       "type": "string",
+       "minLength": 3
+      },
+      "minItems": 1
+     },
+     "decision": {
+      "type": "string",
+      "minLength": 5
+     },
+     "consecuencias": {
+      "type": "array",
+      "items": {
+       "type": "string",
+       "minLength": 3
+      }
+     }
+    },
+    "additionalProperties": false
+   },
+   "minItems": 1
+  },
+  "componentes": {
+   "type": "array",
+   "items": {
+    "type": "object",
+    "required": [
+     "id",
+     "nombre",
+     "bounded_context",
+     "responsabilidad",
+     "entidades"
+    ],
+    "properties": {
+     "id": {
+      "type": "string",
+      "pattern": "^COMP-[0-9]{3}$"
+     },
+     "nombre": {
+      "type": "string"
+     },
+     "bounded_context": {
+      "type": "string"
+     },
+     "responsabilidad": {
+      "type": "string",
+      "minLength": 5
+     },
+     "entidades": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      }
+     }
+    },
+    "additionalProperties": false
+   },
+   "minItems": 1
+  },
+  "integraciones": {
+   "type": "array",
+   "items": {
+    "type": "object",
+    "required": [
+     "id",
+     "origen",
+     "destino",
+     "tipo",
+     "contrato"
+    ],
+    "properties": {
+     "id": {
+      "type": "string",
+      "pattern": "^INT-[0-9]{3}$"
+     },
+     "origen": {
+      "type": "string",
+      "pattern": "^COMP-[0-9]{3}$"
+     },
+     "destino": {
+      "type": "string",
+      "pattern": "^COMP-[0-9]{3}$"
+     },
+     "tipo": {
+      "type": "string",
+      "enum": [
+       "evento",
+       "comando",
+       "consulta"
+      ]
+     },
+     "contrato": {
+      "type": "string",
+      "minLength": 3
+     }
+    },
+    "additionalProperties": false
+   }
+  },
+  "patrones": {
+   "type": "array",
+   "items": {
+    "type": "object",
+    "required": [
+     "id",
+     "patron",
+     "justificacion",
+     "aplica_a"
+    ],
+    "properties": {
+     "id": {
+      "type": "string",
+      "pattern": "^PAT-[0-9]{3}$"
+     },
+     "patron": {
+      "type": "string",
+      "enum": [
+       "Saga",
+       "Outbox",
+       "CircuitBreaker",
+       "CQRS",
+       "StranglerFig",
+       "Cache",
+       "Ninguno"
+      ]
+     },
+     "justificacion": {
+      "type": "string",
+      "minLength": 5
+     },
+     "aplica_a": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      }
+     }
+    },
+    "additionalProperties": false
+   }
+  },
+  "requisitos_seguridad": {
+   "type": "array",
+   "items": {
+    "type": "object",
+    "required": [
+     "id",
+     "descripcion"
+    ],
+    "properties": {
+     "id": {
+      "type": "string",
+      "pattern": "^SEC-[0-9]{3}$"
+     },
+     "descripcion": {
+      "type": "string",
+      "minLength": 5
+     }
+    },
+    "additionalProperties": false
+   }
+  },
+  "provenance": {
+   "$ref": "../../contracts/provenance.schema.json"
+  }
+ },
+ "additionalProperties": false
+}

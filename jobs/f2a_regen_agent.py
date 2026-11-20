@@ -16,7 +16,7 @@ url = f"https://github.com/javierrosado/tesis/archive/refs/heads/{BRANCH}.tar.gz
 tarfile.open(fileobj=io.BytesIO(urllib.request.urlopen(url).read())).extractall("/tmp", filter="data")
 ROOT = Path(f"/tmp/tesis-{BRANCH.replace('/', '-')}"); os.chdir(ROOT); sys.path.insert(0, str(ROOT))
 srv = subprocess.Popen([sys.executable, "-m", "vllm.entrypoints.openai.api_server", "--model", TEACHER, "--port", "8000",
-                        "--max-model-len", "20000", "--gpu-memory-utilization", "0.92", "--max-num-seqs", "32"],
+                        "--max-model-len", "20000", "--gpu-memory-utilization", "0.92", "--max-num-seqs", "48", "--kv-cache-dtype", "fp8"],
                        stdout=open("/tmp/vllm.log", "w"), stderr=subprocess.STDOUT)
 for _ in range(180):
     try:
@@ -42,6 +42,18 @@ adapter = OpenAICompatAdapter({"model": TEACHER, "max_new_tokens": 6144, "temper
 src = Path(snapshot_download(SRC, repo_type="dataset", allow_patterns=[f"{AGENT}/*.jsonl"]))
 items = [(sp, json.loads(l)) for sp in ("train", "val", "test") for l in (src / AGENT / f"{sp}.jsonl").read_text(encoding="utf-8").splitlines()]
 out, lock, stats = {"train": [], "val": [], "test": []}, threading.Lock(), {"ok": 0, "fail": 0, "rondas": [0, 0, 0]}
+# reanudación: conserva lo ya regenerado en DST y no lo repite
+try:
+    prev = Path(snapshot_download(DST, repo_type="dataset", allow_patterns=[f"{AGENT}/*.jsonl"]))
+    for sp in out:
+        f = prev / AGENT / f"{sp}.jsonl"
+        if f.exists():
+            out[sp] = [json.loads(l) for l in f.read_text(encoding="utf-8").splitlines() if '"regen-v2"' in l]
+except Exception:  # noqa: BLE001
+    pass
+done_ids = {r["req_id"] for rows in out.values() for r in rows}
+items = [it for it in items if it[1]["req_id"] not in done_ids]
+print("reanudación:", len(done_ids), "ya regenerados;", len(items), "pendientes", flush=True)
 tel = Telemetry(Path("/tmp/regen.jsonl"))
 
 
@@ -67,13 +79,24 @@ def one(sp_e):
         stats["fail"] += 1
 
 
+def publish(final):
+    d = Path("/tmp/regen_out") / AGENT; d.mkdir(parents=True, exist_ok=True)
+    with lock:
+        snap = {k: list(v) for k, v in out.items()}; st = json.loads(json.dumps(stats))
+    for sp, rows in snap.items():
+        (d / f"{sp}.jsonl").write_text("".join(json.dumps(r, ensure_ascii=False) + "\n" for r in rows), encoding="utf-8")
+    (d / "regen_resumen.json").write_text(json.dumps({"agent": AGENT, "teacher": TEACHER, "src": SRC, "stats": st, "final": final,
+                                                      "counts": {k: len(v) for k, v in snap.items()}}, indent=1), encoding="utf-8")
+    HfApi().upload_folder(folder_path=str(d), path_in_repo=AGENT, repo_id=DST, repo_type="dataset", commit_message=f"regen {AGENT} ({'final' if final else 'parcial'})")
+    print("publicado", st, {k: len(v) for k, v in snap.items()}, flush=True)
+
+
+from concurrent.futures import as_completed   # noqa: E402
 with ThreadPoolExecutor(max_workers=WORKERS) as ex:
-    list(ex.map(one, items))
-d = Path("/tmp/regen_out") / AGENT; d.mkdir(parents=True, exist_ok=True)
-for sp, rows in out.items():
-    (d / f"{sp}.jsonl").write_text("".join(json.dumps(r, ensure_ascii=False) + "\n" for r in rows), encoding="utf-8")
-(d / "regen_resumen.json").write_text(json.dumps({"agent": AGENT, "teacher": TEACHER, "src": SRC, "stats": stats,
-                                                  "counts": {k: len(v) for k, v in out.items()}}, indent=1), encoding="utf-8")
-HfApi().upload_folder(folder_path=str(d), path_in_repo=AGENT, repo_id=DST, repo_type="dataset", commit_message=f"regen {AGENT} con governance v2")
+    futs = [ex.submit(one, it) for it in items]
+    for i, _ in enumerate(as_completed(futs), 1):
+        if i % 30 == 0:
+            publish(False)
+publish(True)
 print("listo", stats, {k: len(v) for k, v in out.items()}, flush=True)
 srv.terminate()

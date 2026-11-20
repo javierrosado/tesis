@@ -5,7 +5,7 @@
    "id": "FIND-001",
    "severidad": "menor",
    "archivo": "app/main.py",
-   "linea": 28,
+   "linea": 13,
    "regla": "estilo",
    "descripcion": "la búsqueda lineal del pedido no registra el acceso con correlation_id",
    "recomendacion": "agregar logging con correlation_id en la siguiente iteración"

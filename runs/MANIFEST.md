@@ -24,3 +24,8 @@
 | 2026-11-19 | F3 | f3-qlora | 6aff880defaf5e14f4b2377e | l40sx1 | 6138 s | ~3,07 | **QLoRA r16, 2 épocas** | tesis-sft-v2 | 2026 | 4 adaptadores: PA eval_loss 0,178 · SA 0,211 · API 0,069 · TC 0,115 (sin sobreajuste) | ✅ |
 | 2026-11-19 | F3 | f3-qlora | 6aff9495efaf5e14f4b24912 | a100-large | 213 s | ~0,15 | maestro | — | — | vLLM no arranca con KV fp8 + AWQ en A100 | ❌ |
 | 2026-11-19 | F3 | f3-qlora | 6aff96b64fdc5ab3c55a863c | a100-large | 3594 s | ~2,50 | maestro Qwen3-32B-AWQ | regen cicd | 2026 | 92 ejemplos train guardados (120 procesados; 28 fallidos); val/test pendientes (timeout) | ⚠️ parcial |
+| 2026-11-20 | F3 | f3-qlora | 6affa9984fdc5ab3c55aa1ed | l40sx1 | 783 s | ~0,39 | base vs 4 LoRA (vLLM multi-LoRA) | test v2 | 2026 | aprobación r0 base→LoRA: PA 91,7→95,8 · SA 100→94,4 · API 90,9→100 · TC 92,9→92,9; tokens −28 a −34 % | ✅ |
+| 2026-11-20 | F3 | f3-qlora | 6affa99f4fdc5ab3c55aa1f3 | a100-large | 2745 s | ~1,91 | maestro | regen cicd (reanudada) | 2026 | cicd final: 136 train · 16 val · 9 test | ✅ |
+| 2026-11-20 | F3 | f3-qlora | 6affb6944fdc5ab3c55ab574 | l40sx1 | 408 s | ~0,20 | QLoRA cicd, max 8192 | — | 2026 | 128/150 descartados por longitud → reentrenar con 12 288 | ❌ |
+| 2026-11-20 | F3 | f3-qlora | 6affbc49efaf5e14f4b28bc7 | l40sx1 | 2223 s | ~1,11 | QLoRA cicd, max 12 288 | tesis-sft-v2 | 2026 | 136 train · eval_loss 0,028 | ✅ |
+| 2026-11-20 | F3 | f3-qlora | 6affc5d4efaf5e14f4b29b80 | l40sx1 | 414 s | ~0,21 | base vs LoRA cicd | test v2 (9) | 2026 | **aprobación r0 22,2 % → 100 %** (McNemar exacto p = 0,016); tokens −26 % | ✅ |

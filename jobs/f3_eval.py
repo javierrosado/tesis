@@ -15,6 +15,8 @@ ADAPTERS = dict(x.split("=") for x in os.environ["ADAPTERS"].split())
 url = f"https://github.com/javierrosado/tesis/archive/refs/heads/{BRANCH}.tar.gz"
 tarfile.open(fileobj=io.BytesIO(urllib.request.urlopen(url).read())).extractall("/tmp", filter="data")
 ROOT = Path(f"/tmp/tesis-{BRANCH.replace('/', '-')}"); os.chdir(ROOT); sys.path.insert(0, str(ROOT)); sys.path.insert(0, str(ROOT / "scripts"))
+from core.envinfo import report as _entorno  # noqa: E402
+ENTORNO = _entorno({"job": os.environ.get("JOB_ID", "local"), "branch": BRANCH})
 from huggingface_hub import snapshot_download, HfApi   # noqa: E402
 mods = []
 for ag, repo in ADAPTERS.items():
@@ -83,6 +85,7 @@ for ag in ADAPTERS:
                                 "tokens_out_media": round(statistics.mean([r.get("tokens_out", 0) for r in rs]), 0),
                                 "latencia_ms_media": round(statistics.mean([r.get("latencia_ms", 0) for r in rs]), 0)}
 d = Path("/tmp/eval"); d.mkdir(exist_ok=True)
+(d / "entorno.json").write_text(json.dumps(ENTORNO, ensure_ascii=False, indent=1), encoding="utf-8")
 (d / "detalle.jsonl").write_text("".join(json.dumps(r, ensure_ascii=False) + "\n" for r in rows), encoding="utf-8")
 (d / "tabla.json").write_text(json.dumps(tabla, ensure_ascii=False, indent=1), encoding="utf-8")
 HfApi().upload_folder(folder_path=str(d), path_in_repo=f"runs/f3_eval/{os.environ.get('JOB_ID', 'local')}", repo_id=os.environ["RUNS_REPO"], repo_type="dataset")

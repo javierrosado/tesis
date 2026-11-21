@@ -13,6 +13,8 @@ from huggingface_hub import HfApi, hf_hub_download, whoami
 from peft import LoraConfig, prepare_model_for_kbit_training
 from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
 from trl import SFTConfig, SFTTrainer
+from importlib import metadata
+print("ENTORNO", {p: metadata.version(p) for p in ("torch", "transformers", "peft", "trl", "bitsandbytes", "accelerate", "datasets")}, torch.cuda.get_device_name(0) if torch.cuda.is_available() else "cpu", flush=True)
 
 BASE = os.environ.get("BASE", "Qwen/Qwen3-8B"); SFT = os.environ["SFT_REPO"]
 AGENTS = os.environ.get("AGENTS", "product-analyst-agent,solution-architect-agent,api-designer-agent,test-case-generator-agent,cicd-pipeline-agent").split(",")

@@ -19,6 +19,8 @@ AGENTS = os.environ.get("AGENTS", "product-analyst-agent solution-architect-agen
 url = f"https://github.com/javierrosado/tesis/archive/refs/heads/{BRANCH}.tar.gz"
 tarfile.open(fileobj=io.BytesIO(urllib.request.urlopen(url).read())).extractall("/tmp", filter="data")
 ROOT = Path(f"/tmp/tesis-{BRANCH.replace('/', '-')}"); os.chdir(ROOT); sys.path.insert(0, str(ROOT)); sys.path.insert(0, str(ROOT / "scripts"))
+from core.envinfo import report as _entorno  # noqa: E402
+ENTORNO = _entorno({"job": os.environ.get("JOB_ID", "local"), "branch": BRANCH})
 from huggingface_hub import snapshot_download, HfApi   # noqa: E402
 import jsonschema                                       # noqa: E402
 from scipy.stats import binomtest                       # noqa: E402
@@ -119,6 +121,7 @@ for m in MODELS[1:]:
     p = binomtest(n10, n10 + n01, 0.5, alternative="greater").pvalue if n10 + n01 else 1.0
     mcn[m] = {"solo_ref_aprueba": n10, "solo_otro_aprueba": n01, "p_mcnemar_unilateral": round(p, 6), "pares": len(comunes)}
 d = Path("/tmp/cmp"); d.mkdir(exist_ok=True)
+(d / "entorno.json").write_text(json.dumps(ENTORNO, ensure_ascii=False, indent=1), encoding="utf-8")
 (d / "detalle.jsonl").write_text("".join(json.dumps(r, ensure_ascii=False) + "\n" for r in rows), encoding="utf-8")
 (d / "tabla.json").write_text(json.dumps({"estado": estado, "tabla": tabla, "mcnemar_vs_ref": mcn, "referencia": ref}, ensure_ascii=False, indent=1), encoding="utf-8")
 HfApi().upload_folder(folder_path=str(d), path_in_repo=f"runs/compare_models/{os.environ.get('JOB_ID', 'local')}", repo_id=os.environ["RUNS_REPO"], repo_type="dataset")

@@ -21,6 +21,8 @@ TRAINABLE = ["product-analyst-agent", "solution-architect-agent", "api-designer-
 url = f"https://github.com/javierrosado/tesis/archive/refs/heads/{BRANCH}.tar.gz"
 tarfile.open(fileobj=io.BytesIO(urllib.request.urlopen(url).read())).extractall("/tmp", filter="data")
 ROOT = Path(f"/tmp/tesis-{BRANCH.replace('/', '-')}"); os.chdir(ROOT); sys.path.insert(0, str(ROOT))
+from core.envinfo import report as _entorno  # noqa: E402
+ENTORNO = _entorno({"job": os.environ.get("JOB_ID", "local"), "branch": BRANCH})
 
 # 1) servidor vLLM con el maestro
 srv = subprocess.Popen([sys.executable, "-m", "vllm.entrypoints.openai.api_server", "--model", TEACHER, "--port", "8000",

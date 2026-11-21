@@ -18,6 +18,8 @@ BASE = os.environ.get("BASE", "Qwen/Qwen3-8B"); WORKERS = int(os.environ.get("WO
 url = f"https://github.com/javierrosado/tesis/archive/refs/heads/{BRANCH}.tar.gz"
 tarfile.open(fileobj=io.BytesIO(urllib.request.urlopen(url).read())).extractall("/tmp", filter="data")
 ROOT = Path(f"/tmp/tesis-{BRANCH.replace('/', '-')}"); os.chdir(ROOT); sys.path.insert(0, str(ROOT))
+from core.envinfo import report as _entorno  # noqa: E402
+ENTORNO = _entorno({"job": os.environ.get("JOB_ID", "local"), "branch": BRANCH})
 from huggingface_hub import HfApi, snapshot_download   # noqa: E402
 api = HfApi()
 reqs = sorted(p.name for p in (ROOT / "data/requerimientos").iterdir() if (p / "input").exists()) if os.environ.get("ALL") == "1" else os.environ["REQS"].split(",")

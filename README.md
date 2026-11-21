@@ -12,7 +12,7 @@ Todo funciona con **modelos de lenguaje de pesos abiertos** (sin APIs comerciale
 
 ## Índice
 
-1. [Objetivos de la tesis y dónde está la evidencia](#1-objetivos-de-la-tesis-y-dónde-está-la-evidencia)
+1. [Objetivos de la tesis y dónde está la evidencia](#1-objetivos-de-la-tesis-y-dónde-está-la-evidencia) · [fases](#11-fases-de-la-implementación-objetivo-entrada-procesamiento-y-salida)
 2. [Arquitectura](#2-arquitectura): [infraestructura](#21-infraestructura-dónde-corre-cada-componente) · [pipeline](#22-arquitectura-lógica-del-pipeline) · [prueba_offline (antes mock)](#23-proveedor-prueba_offline-antes-mock-pruebas-del-software-sin-modelo) · [jobs](#24-jobs-de-gpu-qué-es-un-job-y-para-qué-se-ejecuta-cada-uno) · [otros flujos](#25-otros-flujos) · [ejemplo de punta a punta](#26-ejemplo-de-ejecución-de-punta-a-punta-sim-p05-r001)
 3. [Estructura del repositorio](#3-estructura-del-repositorio)
 4. [Hardware utilizado](#4-hardware-utilizado)
@@ -35,6 +35,91 @@ Todo funciona con **modelos de lenguaje de pesos abiertos** (sin APIs comerciale
 | **OE2/OE3** · Diseñar el pipeline multiagente | 16 agentes con contrato (JSON Schema), criterios de verificación F5, DAG y matriz RACI | [`agents/`](agents/) · [`config/`](config/) · [`contracts/`](contracts/) |
 | **OE3** · Implementar y entrenar | Orquestador propio, governance determinista, 5 adaptadores QLoRA, despliegue | [`core/`](core/) · [`jobs/`](jobs/) · [`notebooks/eda_datasets_entrenamiento.ipynb`](notebooks/eda_datasets_entrenamiento.ipynb) |
 | **OE4** · Verificar en un piloto | Pruebas de humo, gates manuales y despliegue real hechos; piloto con 30 requerimientos programado | [`runs/MANIFEST.md`](runs/MANIFEST.md) · [`scripts/indicadores.py`](scripts/indicadores.py) |
+
+### 1.1 Fases de la implementación: objetivo, entrada, procesamiento y salida
+
+```mermaid
+flowchart LR
+  OE1["OE1<br/>Línea base"] --> F0["F0<br/>Preparación"] --> F1["F1 / F1.1<br/>Vertical Discovery"] --> F2["F2-A<br/>Destilación"] --> F3["F3<br/>QLoRA y evaluación"]
+  F3 --> SEL["Selección<br/>del modelo base"]
+  F3 --> F4["F4<br/>16 agentes y despliegue"] --> F5["F5<br/>Piloto"]
+```
+
+Cada fase entrega algo que usa la siguiente. Las fechas, decisiones y dificultades están en [`docs/BITACORA.md`](docs/BITACORA.md); cada corrida, en [`runs/MANIFEST.md`](runs/MANIFEST.md).
+
+#### OE1 · Línea base AS-IS (23/10/2026) ✅
+
+| | |
+|---|---|
+| **Objetivo** | Medir el estado actual del ciclo del requerimiento, antes del pipeline, para tener un punto de comparación |
+| **Entrada** | [`data/linea_base/Linea_BaseV2.xlsx`](data/linea_base/): registros reales anonimizados de 6 proyectos, con 150 requerimientos, 83 defectos, 40 despliegues y 666 handoffs |
+| **Procesamiento** | EDA en [`notebooks/eda_linea_base.ipynb`](notebooks/eda_linea_base.ipynb): validaciones de integridad, cálculo de los indicadores H1–H6 por agregación y prueba de normalidad (Shapiro-Wilk) |
+| **Salida** | Lead time mediano de 66,5 días · 45 % de despliegues fallidos · 34 % de requerimientos con defecto · 1,0 despliegues/mes por proyecto · 0 % de trazabilidad completa · 0 % de handoffs automáticos (30,9 % registrados). El 69,1 % del lead time es espera. |
+
+#### F0 · Preparación del repositorio (18/11/2026) ✅
+
+| | |
+|---|---|
+| **Objetivo** | Dejar la base técnica y las reglas de trabajo antes de usar modelos |
+| **Entrada** | Diseño de los 16 agentes del plan de tesis (fichas F1–F5), restricción del asesor (modelos de pesos abiertos, sin API comerciales) |
+| **Procesamiento** | Estructura del repositorio, contratos JSON Schema de cada artefacto, orquestador propio con DAG, capa de proveedores intercambiable, reglas de gobierno en `CLAUDE.md` y CI con el proveedor `prueba_offline` |
+| **Salida** | Repositorio con CI en verde; decisiones **D-IMP-1** (piloto con ejecución real) y **D-IMP-3** (Qwen3-8B + un adaptador QLoRA por dominio) |
+
+#### F1 y F1.1 · Vertical Discovery con un modelo real (18/11/2026) ✅
+
+| | |
+|---|---|
+| **Objetivo** | Probar con un modelo real que la cadena de un dominio funciona: agente → validación → siguiente agente |
+| **Entrada** | Requerimiento SIM-P05-R001 y los 3 agentes de Discovery (product-analyst, domain-modeling, ux-ui-copilot) |
+| **Procesamiento** | Job en L40S con Qwen3-8B en 4 bits (`jobs/f1_smoke.py`). En F1 governance usaba un LLM; en F1.1 se reemplazó por reglas deterministas |
+| **Salida** | 100 % de salidas válidas contra el esquema. La governance con LLM era inconsistente (1 → 8 → 10 hallazgos sobre el mismo artefacto); con reglas deterministas, 3/3 artefactos aprobados de forma reproducible |
+
+#### F2-A · Agentes de los 5 dominios y destilación de datos (19/11/2026) ✅
+
+| | |
+|---|---|
+| **Objetivo** | Implementar los agentes de los 5 dominios y generar los datos de entrenamiento de los agentes entrenables |
+| **Entrada** | Semillas sintéticas de requerimientos (`scripts/gen_seeds.py`, proyectos SIM-T01…T05, distintos del piloto) y el modelo maestro Qwen3-32B-AWQ |
+| **Procesamiento** | El maestro ejecuta el pipeline completo sobre cada semilla (`jobs/f2a_distill.py`). Governance acepta o rechaza cada salida; solo se guardan las aprobadas |
+| **Salida** | Agentes de los 5 dominios funcionando (7/7 artefactos aprobados en la prueba) y 1 165 ejemplos aprobados (`tesis-sft-final`, privado) |
+
+#### F3 · Ajuste fino QLoRA y evaluación (19–20/11/2026) ✅
+
+| | |
+|---|---|
+| **Objetivo** | Especializar un agente por dominio y medir, de forma controlada, si el entrenamiento mejora su desempeño |
+| **Entrada** | Los 1 165 ejemplos de F2-A, Qwen3-8B y las reglas de governance |
+| **Procesamiento** | Governance v2 (6 reglas nuevas) y re-filtrado; regeneración de los ejemplos de DevOps (`jobs/f2a_regen_agent.py`); entrenamiento QLoRA de 5 adaptadores (rango 16, α 32, 2 épocas, semilla 2026, `jobs/f3_train_qlora.py`); evaluación base contra LoRA en la partición de prueba, con una generación por caso y McNemar exacto (`jobs/f3_eval.py`) |
+| **Salida** | Dataset `tesis-sft-v2` (1 013 ejemplos, público), 5 adaptadores públicos y resultados: DevOps pasa de 22,2 % a 100 % de aprobación en ronda 0 (p = 0,016), con 26–34 % menos tokens en los agentes de salida larga (sección 8) |
+
+#### Selección del modelo base (20/11/2026) ✅
+
+| | |
+|---|---|
+| **Objetivo** | Justificar con datos por qué se eligió Qwen3-8B como base |
+| **Entrada** | Los 87 casos de prueba de `tesis-sft-v2` y tres candidatos sin ajuste: Qwen3-8B, Llama-3.1-8B-Instruct y Mistral-7B-Instruct-v0.3 |
+| **Procesamiento** | Mismo prompt, temperatura 0 y salida restringida para los tres, servidos de uno en uno en la misma GPU (`jobs/compare_models.py`). Regla de decisión en orden: filtro de contrato válido ≥ 95 %, mayor aprobación en ronda 0, desempate por costo, McNemar |
+| **Salida** | Qwen3-8B: 100 % de contratos válidos y 82,8 % de aprobación, frente a 60,9 % de Llama (p = 0,0002) y 72,4 % de Mistral (p = 0,039). Llama es más rápido; se reporta |
+
+#### F4 · Pipeline de 16 agentes, aprobaciones y despliegue (20/11/2026) ✅
+
+| | |
+|---|---|
+| **Objetivo** | Integrar los 16 agentes de punta a punta, con aprobaciones por riesgo y despliegue real, y validar la instrumentación |
+| **Entrada** | Requerimientos SIM-P05-R001 a R003, los 5 adaptadores, el maestro y la matriz RACI |
+| **Procesamiento** | Pruebas de humo en A100 (`jobs/run_pipeline_job.py`); corrección de 13 fallas; decisión **D-F4-1** (el maestro atiende a backend, QA y code-review); prueba del flujo de gates manuales; despliegue a `tesis-sandbox` |
+| **Salida** | Dos requerimientos recorrieron los 16 agentes hasta un release *no-go* justificado (sección 2.6). Despliegue real validado (run 44764311596: test ✔ y deploy ✔). Flujo de aprobación humana probado (opción A). Costo ≈ USD 3,84 |
+
+#### F5 · Piloto (23/11 – 04/12/2026) ⏳ programado
+
+| | |
+|---|---|
+| **Objetivo** | Verificar el pipeline en el caso real y contrastar sus indicadores con la línea base (OE4) |
+| **Entrada** | Los 30 requerimientos del Squad Fuerza de Ventas ([`data/requerimientos/`](data/requerimientos/)), los modelos de F3 y F4, y las decisiones humanas del autor |
+| **Procesamiento** | `jobs/run_pipeline_job.py` con `GATES_MODE=manual`: el pipeline se detiene en cada gate de riesgo alto; el autor decide en ventanas de 09:00 y 17:00 con un dictamen de IA registrado aparte (`scripts/pilot_control.py lote`); los releases *go* se despliegan en el sandbox. Tope de gasto: USD 10 |
+| **Salida esperada** | Telemetría por requerimiento y los indicadores H1–H6 del piloto calculados con `scripts/indicadores.py`, para contrastarlos con los de OE1 en la tesis |
+
+**Transversal · Reproducibilidad (20/11/2026) ✅.** Versiones fijadas en cada job, registro de hardware y versiones (`core/envinfo.py`), notebooks de EDA ejecutados, verificación de fuga (`scripts/verificar_fuga.py`) y repetición de la evaluación de DevOps con resultado idéntico (9/9). Detalle en la sección 7.
 
 ## 2. Arquitectura
 

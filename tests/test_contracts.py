@@ -1,4 +1,4 @@
-"""Pruebas de contrato y de DAG con el proveedor mock (sin red, sin GPU). Se ejecutan en CI."""
+"""Pruebas de contrato y de DAG con el proveedor prueba_offline (sin modelo, sin red, sin GPU). Se ejecutan en CI."""
 import json, os, sys
 from pathlib import Path
 import jsonschema, pytest
@@ -39,8 +39,8 @@ def test_intake_matches_business_request_contract():
     assert br["reglas_negocio"] == ["BR-010", "BR-011"]
 
 
-def test_dag_runs_with_mock(tmp_path, monkeypatch):
-    monkeypatch.setenv("PIPELINE_PROVIDER", "mock")
+def test_dag_runs_offline(tmp_path, monkeypatch):
+    monkeypatch.setenv("PIPELINE_PROVIDER", "prueba_offline")
     tel = Telemetry(tmp_path / "ev.jsonl")
     import shutil
     shutil.rmtree(ROOT / "data/requerimientos/SIM-P05-R001/output", ignore_errors=True)

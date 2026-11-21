@@ -13,7 +13,7 @@ cualquier agente que ejecute código en el repo debe cumplir.
 ## Ramas y cambios
 - `main` solo se actualiza por Pull Request aprobado por Javier.
 - Una rama por fase: `f0-setup`, `f1-discovery`, `f2-dataset`, `f3-finetune`, `f4-agentes`, `f5-piloto`, `f6-contraste`.
-- Cada PR debe pasar el CI (pytest + dry-run con proveedor `mock`).
+- Cada PR debe pasar el CI (pytest + dry-run con el proveedor `prueba_offline`, antes `mock`: sin modelo).
 
 ## Cómputo y costo
 - GPU solo vía Hugging Face Jobs, con `configs/<corrida>.yaml` que declare flavor, timeout y tope de costo.

@@ -8,10 +8,10 @@ jobs:
       - uses: actions/setup-python@v5
         with: {python-version: "3.11"}
       - run: pip install -r requirements.txt
-      - name: Pruebas de contrato y DAG (proveedor mock)
+      - name: Pruebas de contrato y DAG (proveedor prueba_offline, sin modelo)
         run: pytest -q
       - name: Dry-run del vertical Discovery
-        env: {PIPELINE_PROVIDER: mock}
+        env: {PIPELINE_PROVIDER: prueba_offline}
         run: python scripts/run_pipeline.py --req SIM-P05-R001 --telemetry telemetry/ci.jsonl
       - uses: actions/upload-artifact@v4
         with: {name: telemetria-ci, path: telemetry/ci.jsonl}

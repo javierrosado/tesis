@@ -12,8 +12,8 @@ Todo funciona con **modelos de lenguaje de pesos abiertos** (sin APIs comerciale
 
 ## Índice
 
-1. [Objetivos de la tesis y dónde está la evidencia](#1-objetivos-de-la-tesis-y-dónde-está-la-evidencia)
-2. [Arquitectura](#2-arquitectura): [infraestructura](#21-infraestructura-dónde-corre-cada-componente) · [pipeline](#22-arquitectura-lógica-del-pipeline) · [¿qué es mock?](#23-qué-significa-mock-y-por-qué-no-implica-datos-falsos) · [jobs](#24-jobs-de-gpu-qué-es-un-job-y-para-qué-se-ejecuta-cada-uno) · [otros flujos](#25-otros-flujos)
+1. [Objetivos de la tesis y dónde está la evidencia](#1-objetivos-de-la-tesis-y-dónde-está-la-evidencia) · [fases](#11-fases-de-la-implementación-objetivo-entrada-procesamiento-y-salida)
+2. [Arquitectura](#2-arquitectura): [infraestructura](#21-infraestructura-dónde-corre-cada-componente) · [pipeline](#22-arquitectura-lógica-del-pipeline) · [prueba_offline (antes mock)](#23-proveedor-prueba_offline-antes-mock-pruebas-del-software-sin-modelo) · [jobs](#24-jobs-de-gpu-qué-es-un-job-y-para-qué-se-ejecuta-cada-uno) · [otros flujos](#25-otros-flujos) · [ejemplo de punta a punta](#26-ejemplo-de-ejecución-de-punta-a-punta-sim-p05-r001)
 3. [Estructura del repositorio](#3-estructura-del-repositorio)
 4. [Hardware utilizado](#4-hardware-utilizado)
 5. [Software y versiones](#5-software-y-versiones)
@@ -36,21 +36,106 @@ Todo funciona con **modelos de lenguaje de pesos abiertos** (sin APIs comerciale
 | **OE3** · Implementar y entrenar | Orquestador propio, governance determinista, 5 adaptadores QLoRA, despliegue | [`core/`](core/) · [`jobs/`](jobs/) · [`notebooks/eda_datasets_entrenamiento.ipynb`](notebooks/eda_datasets_entrenamiento.ipynb) |
 | **OE4** · Verificar en un piloto | Pruebas de humo, gates manuales y despliegue real hechos; piloto con 30 requerimientos programado | [`runs/MANIFEST.md`](runs/MANIFEST.md) · [`scripts/indicadores.py`](scripts/indicadores.py) |
 
+### 1.1 Fases de la implementación: objetivo, entrada, procesamiento y salida
+
+```mermaid
+flowchart LR
+  OE1["OE1<br/>Línea base"] --> F0["F0<br/>Preparación"] --> F1["F1 / F1.1<br/>Vertical Discovery"] --> F2["F2-A<br/>Destilación"] --> F3["F3<br/>QLoRA y evaluación"]
+  F3 --> SEL["Selección<br/>del modelo base"]
+  F3 --> F4["F4<br/>16 agentes y despliegue"] --> F5["F5<br/>Piloto"]
+```
+
+Cada fase entrega algo que usa la siguiente. Las fechas, decisiones y dificultades están en [`docs/BITACORA.md`](docs/BITACORA.md); cada corrida, en [`runs/MANIFEST.md`](runs/MANIFEST.md).
+
+#### OE1 · Línea base AS-IS (23/10/2026) ✅
+
+| | |
+|---|---|
+| **Objetivo** | Medir el estado actual del ciclo del requerimiento, antes del pipeline, para tener un punto de comparación |
+| **Entrada** | [`data/linea_base/Linea_BaseV2.xlsx`](data/linea_base/): registros reales anonimizados de 6 proyectos, con 150 requerimientos, 83 defectos, 40 despliegues y 666 handoffs |
+| **Procesamiento** | EDA en [`notebooks/eda_linea_base.ipynb`](notebooks/eda_linea_base.ipynb): validaciones de integridad, cálculo de los indicadores H1–H6 por agregación y prueba de normalidad (Shapiro-Wilk) |
+| **Salida** | Lead time mediano de 66,5 días · 45 % de despliegues fallidos · 34 % de requerimientos con defecto · 1,0 despliegues/mes por proyecto · 0 % de trazabilidad completa · 0 % de handoffs automáticos (30,9 % registrados). El 69,1 % del lead time es espera. |
+
+#### F0 · Preparación del repositorio (18/11/2026) ✅
+
+| | |
+|---|---|
+| **Objetivo** | Dejar la base técnica y las reglas de trabajo antes de usar modelos |
+| **Entrada** | Diseño de los 16 agentes del plan de tesis (fichas F1–F5), restricción del asesor (modelos de pesos abiertos, sin API comerciales) |
+| **Procesamiento** | Estructura del repositorio, contratos JSON Schema de cada artefacto, orquestador propio con DAG, capa de proveedores intercambiable, reglas de gobierno en `CLAUDE.md` y CI con el proveedor `prueba_offline` |
+| **Salida** | Repositorio con CI en verde; decisiones **D-IMP-1** (piloto con ejecución real) y **D-IMP-3** (Qwen3-8B + un adaptador QLoRA por dominio) |
+
+#### F1 y F1.1 · Vertical Discovery con un modelo real (18/11/2026) ✅
+
+| | |
+|---|---|
+| **Objetivo** | Probar con un modelo real que la cadena de un dominio funciona: agente → validación → siguiente agente |
+| **Entrada** | Requerimiento SIM-P05-R001 y los 3 agentes de Discovery (product-analyst, domain-modeling, ux-ui-copilot) |
+| **Procesamiento** | Job en L40S con Qwen3-8B en 4 bits (`jobs/f1_smoke.py`). En F1 governance usaba un LLM; en F1.1 se reemplazó por reglas deterministas |
+| **Salida** | 100 % de salidas válidas contra el esquema. La governance con LLM era inconsistente (1 → 8 → 10 hallazgos sobre el mismo artefacto); con reglas deterministas, 3/3 artefactos aprobados de forma reproducible |
+
+#### F2-A · Agentes de los 5 dominios y destilación de datos (19/11/2026) ✅
+
+| | |
+|---|---|
+| **Objetivo** | Implementar los agentes de los 5 dominios y generar los datos de entrenamiento de los agentes entrenables |
+| **Entrada** | Semillas sintéticas de requerimientos (`scripts/gen_seeds.py`, proyectos SIM-T01…T05, distintos del piloto) y el modelo maestro Qwen3-32B-AWQ |
+| **Procesamiento** | El maestro ejecuta el pipeline completo sobre cada semilla (`jobs/f2a_distill.py`). Governance acepta o rechaza cada salida; solo se guardan las aprobadas |
+| **Salida** | Agentes de los 5 dominios funcionando (7/7 artefactos aprobados en la prueba) y 1 165 ejemplos aprobados (`tesis-sft-final`, privado) |
+
+#### F3 · Ajuste fino QLoRA y evaluación (19–20/11/2026) ✅
+
+| | |
+|---|---|
+| **Objetivo** | Especializar un agente por dominio y medir, de forma controlada, si el entrenamiento mejora su desempeño |
+| **Entrada** | Los 1 165 ejemplos de F2-A, Qwen3-8B y las reglas de governance |
+| **Procesamiento** | Governance v2 (6 reglas nuevas) y re-filtrado; regeneración de los ejemplos de DevOps (`jobs/f2a_regen_agent.py`); entrenamiento QLoRA de 5 adaptadores (rango 16, α 32, 2 épocas, semilla 2026, `jobs/f3_train_qlora.py`); evaluación base contra LoRA en la partición de prueba, con una generación por caso y McNemar exacto (`jobs/f3_eval.py`) |
+| **Salida** | Dataset `tesis-sft-v2` (1 013 ejemplos, público), 5 adaptadores públicos y resultados: DevOps pasa de 22,2 % a 100 % de aprobación en ronda 0 (p = 0,016), con 26–34 % menos tokens en los agentes de salida larga (sección 8) |
+
+#### Selección del modelo base (20/11/2026) ✅
+
+| | |
+|---|---|
+| **Objetivo** | Justificar con datos por qué se eligió Qwen3-8B como base |
+| **Entrada** | Los 87 casos de prueba de `tesis-sft-v2` y tres candidatos sin ajuste: Qwen3-8B, Llama-3.1-8B-Instruct y Mistral-7B-Instruct-v0.3 |
+| **Procesamiento** | Mismo prompt, temperatura 0 y salida restringida para los tres, servidos de uno en uno en la misma GPU (`jobs/compare_models.py`). Regla de decisión en orden: filtro de contrato válido ≥ 95 %, mayor aprobación en ronda 0, desempate por costo, McNemar |
+| **Salida** | Qwen3-8B: 100 % de contratos válidos y 82,8 % de aprobación, frente a 60,9 % de Llama (p = 0,0002) y 72,4 % de Mistral (p = 0,039). Llama es más rápido; se reporta |
+
+#### F4 · Pipeline de 16 agentes, aprobaciones y despliegue (20/11/2026) ✅
+
+| | |
+|---|---|
+| **Objetivo** | Integrar los 16 agentes de punta a punta, con aprobaciones por riesgo y despliegue real, y validar la instrumentación |
+| **Entrada** | Requerimientos SIM-P05-R001 a R003, los 5 adaptadores, el maestro y la matriz RACI |
+| **Procesamiento** | Pruebas de humo en A100 (`jobs/run_pipeline_job.py`); corrección de 13 fallas; decisión **D-F4-1** (el maestro atiende a backend, QA y code-review); prueba del flujo de gates manuales; despliegue a `tesis-sandbox` |
+| **Salida** | Dos requerimientos recorrieron los 16 agentes hasta un release *no-go* justificado (sección 2.6). Despliegue real validado (run 44764311596: test ✔ y deploy ✔). Flujo de aprobación humana probado (opción A). Costo ≈ USD 3,84 |
+
+#### F5 · Piloto (23/11 – 04/12/2026) ⏳ programado
+
+| | |
+|---|---|
+| **Objetivo** | Verificar el pipeline en el caso real y contrastar sus indicadores con la línea base (OE4) |
+| **Entrada** | Los 30 requerimientos del Squad Fuerza de Ventas ([`data/requerimientos/`](data/requerimientos/)), los modelos de F3 y F4, y las decisiones humanas del autor |
+| **Procesamiento** | `jobs/run_pipeline_job.py` con `GATES_MODE=manual`: el pipeline se detiene en cada gate de riesgo alto; el autor decide en ventanas de 09:00 y 17:00 con un dictamen de IA registrado aparte (`scripts/pilot_control.py lote`); los releases *go* se despliegan en el sandbox. Tope de gasto: USD 10 |
+| **Salida esperada** | Telemetría por requerimiento y los indicadores H1–H6 del piloto calculados con `scripts/indicadores.py`, para contrastarlos con los de OE1 en la tesis |
+
+**Transversal · Reproducibilidad (20/11/2026) ✅.** Versiones fijadas en cada job, registro de hardware y versiones (`core/envinfo.py`), notebooks de EDA ejecutados, verificación de fuga (`scripts/verificar_fuga.py`) y repetición de la evaluación de DevOps con resultado idéntico (9/9). Detalle en la sección 7.
+
 ## 2. Arquitectura
 
-La arquitectura tiene dos vistas. La **infraestructura** (2.1) muestra dónde corre cada cosa: tu PC, GitHub, Hugging Face y Colab. La **arquitectura lógica** (2.2) muestra cómo se encadenan los 16 agentes dentro del pipeline. La sección 2.3 aclara qué significa *mock* en este repositorio, la 2.4 explica qué hace cada job de GPU y la 2.5 describe los demás flujos (datos y entrenamiento, piloto con aprobaciones humanas, CI, EDA e indicadores).
+La arquitectura tiene dos vistas. La **infraestructura** (2.1) muestra dónde corre cada cosa: la PC del autor, GitHub, Hugging Face y Colab. La **arquitectura lógica** (2.2) muestra cómo se encadenan los 16 agentes dentro del pipeline. La sección 2.3 explica el proveedor `prueba_offline` (antes `mock`), que prueba el software sin modelo; la 2.4 explica qué hace cada job de GPU, la 2.5 describe los demás flujos (datos y entrenamiento, piloto con aprobaciones humanas, CI, EDA e indicadores) y la 2.6 sigue un requerimiento real de punta a punta.
 
 ### 2.1 Infraestructura: dónde corre cada componente
 
 ```mermaid
 flowchart LR
   subgraph PC["PC del autor · Windows, sin GPU"]
-    DEV["Código y git<br/>pytest con proveedor mock<br/>CLI hf jobs"]
+    DEV["Código y git<br/>pytest sin modelo · prueba_offline<br/>CLI hf jobs"]
   end
 
   subgraph GH["GitHub"]
     REPO["javierrosado/tesis<br/>código · PRs · bitácora · MANIFEST<br/>Excel de línea base"]
-    CI["GitHub Actions · CI<br/>38 pruebas con mock"]
+    CI["GitHub Actions · CI<br/>38 pruebas sin modelo"]
     SBX["javierrosado/tesis-sandbox<br/>rama req/ID por requerimiento"]
     CD["GitHub Actions · CD<br/>test + deploy a staging"]
   end
@@ -94,9 +179,9 @@ flowchart LR
 
 | Componente | Qué es | Para qué se usa en la tesis | Qué ejecuta o guarda | Evidencia |
 |---|---|---|---|---|
-| **PC del autor** | Windows x64 sin GPU, con Python 3.10 | Escribir código, correr las pruebas, lanzar los jobs de GPU y calcular los indicadores | `pytest` con proveedor mock, CLI `hf jobs`, `scripts/indicadores.py` | 38 pruebas en verde |
+| **PC del autor** | Windows x64 sin GPU, con Python 3.10 | Escribir código, correr las pruebas, lanzar los jobs de GPU y calcular los indicadores | `pytest` con el proveedor `prueba_offline` (sin modelo), CLI `hf jobs`, `scripts/indicadores.py` | 38 pruebas en verde |
 | **GitHub · `javierrosado/tesis`** | Repositorio público (este) | Código fuente, control de versiones y trazabilidad | Agentes, orquestador, jobs, notebooks, `docs/BITACORA.md`, `runs/MANIFEST.md`, Excel de línea base | PR #1 a #9, cada uno aprobado por el autor |
-| **GitHub Actions · CI** | Runner `ubuntu-latest`, sin GPU | Comprobar en cada cambio que el código del pipeline funciona | `pytest -q` y un dry-run con el proveedor mock (ver 2.3) | Pestaña *Actions* del repo |
+| **GitHub Actions · CI** | Runner `ubuntu-latest`, sin GPU | Comprobar en cada cambio que el código del pipeline funciona | `pytest -q` y un dry-run con el proveedor `prueba_offline`, sin modelo (ver 2.3) | Pestaña *Actions* del repo |
 | **Google Colab** | Notebooks en la nube, sin GPU | Que cualquier lector reproduzca el EDA sin instalar nada | `eda_linea_base.ipynb` y `eda_datasets_entrenamiento.ipynb` | Botones "Abrir en Colab" (7.3) |
 | **HF Hub** | Almacenamiento de modelos y datos de Hugging Face | Descargar los modelos base y publicar lo que produce la tesis | Pesos de `Qwen/*` (de la organización Qwen); 5 LoRA, `tesis-sft-v2` y `tesis-runs` (públicos, cuenta `jrosado1974`) | Enlaces en la sección 6 |
 | **HF Jobs** | Contenedores con GPU que se pagan por segundo y se apagan al terminar | **Toda ejecución real de modelos:** destilación, entrenamiento QLoRA, evaluación, comparación de modelos y pipeline | Dos servidores vLLM en el mismo contenedor (8B + LoRA en `:8000`, maestro 32B en `:8001`) y el pipeline, que les habla por `localhost` | 40 jobs con su id en `runs/MANIFEST.md`; hardware y versiones en `entorno.json` |
@@ -106,7 +191,7 @@ flowchart LR
 **Secuencia de punta a punta** (los números coinciden con las flechas del diagrama)
 
 1. **Desarrollo.** El autor programa en su PC, abre un pull request y lo aprueba; solo así cambia `main`.
-2. **Integración continua.** GitHub Actions corre las 38 pruebas con el proveedor mock: verifica el código, no el modelo (2.3).
+2. **Integración continua.** GitHub Actions corre las 38 pruebas con el proveedor `prueba_offline`: verifica el código, no el modelo (2.3).
 3. **Lanzamiento.** Desde la PC se lanza un job: `hf jobs uv run --flavor a100-large ... jobs/<script>.py`.
 4. **Código versionado.** El job descarga de GitHub la rama indicada; así cada resultado queda atado a una versión del código.
 5. **Modelos.** vLLM descarga de HF Hub los pesos base de Qwen y los adaptadores LoRA, y los sirve dentro del contenedor.
@@ -154,24 +239,24 @@ flowchart LR
 
 Los modelos se sirven con **vLLM** (multi-LoRA y salida restringida por JSON Schema). El modelo es un recurso inyectado por configuración: cambiar de proveedor es editar `config/providers.yaml`.
 
-### 2.3 ¿Qué significa *mock*? (y por qué no implica datos falsos)
+### 2.3 Proveedor `prueba_offline` (antes `mock`): pruebas del software sin modelo
 
-*Mock* es el nombre de uno de los proveedores de modelo de `config/providers.yaml`. **No es un tipo de dato ni una simulación del piloto:** es un sustituto del LLM que devuelve respuestas fijas guardadas en `tests/fixtures/`. Se usa con un único fin: **probar el software del pipeline** (orquestador, contratos, governance, reintentos, telemetría) de forma rápida, gratuita y repetible.
+`prueba_offline` es uno de los proveedores de modelo de `config/providers.yaml`; hasta el 20/11/2026 se llamaba `mock`, nombre que se conserva como alias. **No llama a ningún modelo de lenguaje:** devuelve artefactos de ejemplo predefinidos, guardados en `tests/fixtures/` (16 archivos, uno por agente, para el requerimiento SIM-P05-R001). Por eso sus salidas **no miden la calidad del modelo** y no se usan como resultado. Su único fin es **probar el software del pipeline** (orquestador, contratos, governance, reintentos, telemetría) de forma rápida, gratuita y repetible.
 
-| | Proveedor `mock` | Proveedor `vllm_local` (real) |
+| | Proveedor `prueba_offline` | Proveedor `vllm_local` (real) |
 |---|---|---|
-| Qué responde | Un JSON guardado en `tests/fixtures/<agente>/<req>.json` | Qwen3-8B (con su LoRA) o Qwen3-32B-AWQ, generando en GPU |
-| Dónde corre | PC del autor y GitHub Actions, sin GPU | HF Jobs (L40S o A100) |
+| Qué responde | Un artefacto JSON predefinido de `tests/fixtures/<agente>/<req>.json`; no hay modelo | Qwen3-8B (con su LoRA) o Qwen3-32B-AWQ, generando en GPU |
+| Dónde corre | PC del autor y GitHub Actions, sin GPU ni red | HF Jobs (L40S o A100) |
 | Qué demuestra | Que **el código** funciona: el DAG avanza, governance rechaza lo inválido, hay reintento y escalamiento, la telemetría se escribe | Qué tan bien **el modelo** hace la tarea: aprobación en ronda 0, métricas F5, McNemar, indicadores del piloto |
 | Costo y tiempo | USD 0 · ~2 min | Por segundo de GPU · minutos a horas |
 | ¿Sus resultados van a la tesis? | **No** | **Sí** |
-| Corridas en el MANIFEST | 2 de 44 (F0 y una verificación local de F4) | 40 de 44 en GPU; las otras 2 son pasos locales de datos (fusión y re-filtro) |
+| Corridas en el MANIFEST | 2 de 44 (F0 y una verificación local de F4; registradas como `mock`, su nombre de entonces) | 40 de 44 en GPU; las otras 2 son pasos locales de datos (fusión y re-filtro) |
 
-**Por qué existe.** El runner de GitHub Actions no tiene GPU. Además, una prueba de software debe dar siempre el mismo resultado: si se usara el LLM real, una variación de un caso del modelo haría fallar la prueba sin que el código tenga ningún error. Con mock, si una prueba falla, el error está en el código. Es la práctica habitual de pruebas unitarias con dobles de prueba.
+**Por qué existe.** El runner de GitHub Actions no tiene GPU. Además, una prueba de software debe dar siempre el mismo resultado: si se usara el LLM real, una variación de un caso del modelo haría fallar la prueba sin que el código tenga ningún error. Con respuestas predefinidas, si una prueba falla, el error está en el código. Es la práctica habitual de pruebas unitarias con dobles de prueba (*test doubles*), que en la jerga de software suelen llamarse *mocks*; se cambió el nombre porque fuera de ese contexto "mock" se entiende como "resultados simulados".
 
-**Cómo comprobar qué proveedor produjo cada dato.** Cada evento de telemetría registra `provider` y `model_id` (`core/telemetry.py`, `core/model_port.py`). En los 24 archivos de telemetría publicados en `tesis-runs` (revisados el 20/11/2026) aparecen `openai_compat` (vLLM, con `model_id` igual al nombre del adaptador, `Qwen/Qwen3-8B` o `Qwen/Qwen3-32B-AWQ`), `deterministic` (governance) y `hf_local` (F1). **Ningún evento tiene `provider = mock`.**
+**Cómo comprobar qué proveedor produjo cada dato.** Cada evento de telemetría registra `provider` y `model_id` (`core/telemetry.py`, `core/model_port.py`). Con este proveedor, `model_id` es `artefacto-de-prueba`. En los 24 archivos de telemetría publicados en `tesis-runs` (revisados el 20/11/2026) aparecen `openai_compat` (vLLM, con `model_id` igual al nombre del adaptador, `Qwen/Qwen3-8B` o `Qwen/Qwen3-32B-AWQ`), `deterministic` (governance) y `hf_local` (F1). **Ningún evento proviene del proveedor de prueba** (ni `mock` ni `prueba_offline`).
 
-**Un caso a tener en cuenta.** La tubería de despliegue a `tesis-sandbox` (run 44764311596) se validó con artefactos del mock para probarla sin gastar GPU. En las pruebas de humo con el modelo real ningún release salió *go*, porque las pruebas del código generado no pasaron. El despliegue de código generado por el LLM se demostrará en el piloto F5, cuando un requerimiento obtenga release *go*.
+**Un caso a tener en cuenta.** La tubería de despliegue a `tesis-sandbox` (run 44764311596) se validó con los artefactos predefinidos de este proveedor, para probarla sin gastar GPU. En las pruebas de humo con el modelo real ningún release salió *go*, porque las pruebas del código generado no pasaron. El despliegue de código generado por el LLM se demostrará en el piloto F5, cuando un requerimiento obtenga release *go*.
 
 ### 2.4 Jobs de GPU: qué es un job y para qué se ejecuta cada uno
 
@@ -268,11 +353,81 @@ sequenceDiagram
   PC->>PC: indicadores.py → tablas de la tesis
 ```
 
-**Flujo de integración continua.** En cada push o pull request, GitHub Actions instala `requirements.txt`, corre `pytest -q` (38 pruebas) y un dry-run del vertical Discovery con el proveedor mock. Sirve para detectar errores de código antes del merge. No usa GPU ni modelos (2.3).
+**Flujo de integración continua.** En cada push o pull request, GitHub Actions instala `requirements.txt`, corre `pytest -q` (38 pruebas) y un dry-run del vertical Discovery con el proveedor `prueba_offline`. Sirve para detectar errores de código antes del merge. No usa GPU ni modelos (2.3).
 
 **Flujo de reproducción del EDA.** El lector abre un notebook en Colab. El notebook descarga el Excel desde GitHub o el dataset desde HF Hub, y recalcula las cifras publicadas sin GPU (7.3).
 
 **Flujo de indicadores.** `scripts/indicadores.py` lee los JSONL de telemetría (cada evento trae `agent`, `provider`, `model_id`, tokens y latencia) y agrupa por clase de modelo: `lora`, `base`, `maestro` y `determinista`. Produce las tablas de la tesis en Markdown o CSV.
+
+### 2.6 Ejemplo de ejecución de punta a punta: SIM-P05-R001
+
+Este ejemplo sigue un requerimiento real del piloto a través de los 16 agentes, con los modelos reales en GPU. Los datos salen de la telemetría publicada de la prueba de humo `humo16d` (job `6b0062d9efaf5e14f4b36f4e`, A100, 20/11/2026). Los artefactos generados se pueden abrir en [`tesis-runs/piloto/humo16d/estado/SIM-P05-R001/output`](https://huggingface.co/datasets/jrosado1974/tesis-runs/tree/main/piloto/humo16d/estado/SIM-P05-R001/output).
+
+**1. Entrada.** Resumen del brief del requerimiento ([`data/requerimientos/SIM-P05-R001/input/brief.md`](data/requerimientos/SIM-P05-R001/input/brief.md)):
+
+> **Consulta de estado del pedido en tiempo real.** Las consultoras llaman al centro de atención para saber dónde está su pedido; el portal muestra solo "en proceso" hasta la facturación. Se pide ver la etapa del pedido (registrado, aprobado, en preparación, despachado, entregado) y la fecha estimada de entrega. Reglas: BR-010 (estados del pedido) y BR-011 (fecha estimada por zona). 5 puntos, Ecuador, app móvil y web.
+
+**2. Ejecución.** Dos formas de correrlo:
+
+```bash
+# a) Prueba del software, sin modelo (cualquier lector, ~2 min, sin GPU): recorre el DAG con artefactos predefinidos
+PIPELINE_PROVIDER=prueba_offline python scripts/run_pipeline.py --req SIM-P05-R001
+
+# b) Ejecución real con los modelos en GPU (la de este ejemplo; $AD = lista de adaptadores, ver 7.4)
+hf jobs uv run --flavor a100-large --timeout 1h --secrets HF_TOKEN \
+  -e BRANCH=main -e PILOT=ejemplo -e REQS=SIM-P05-R001 -e RUNS_REPO=$U/tesis-runs \
+  -e "ADAPTERS=$AD" -e GATES_MODE=auto -e TEACHER_MODE=always jobs/run_pipeline_job.py
+```
+
+**3. Recorrido por los agentes** (cifras tomadas de la telemetría; "rechazos" son devoluciones de governance con su hallazgo)
+
+| # | Dominio | Agente | Modelo que respondió | Llamadas | Rechazos de governance | Tokens generados | Tiempo del modelo | Artefacto producido |
+|---|---|---|---|---|---|---|---|---|
+| 1 | Discovery | product-analyst | Qwen3-8B + LoRA | 1 | 0 | 974 | 18,9 s | 5 historias de usuario con criterios Given/When/Then |
+| 2 | Discovery | ux-ui-copilot | Qwen3-8B base | 1 | 0 | 429 | 6,6 s | Especificación UX |
+| 3 | Discovery | domain-modeling | Qwen3-8B base | 1 | 0 | 639 | 9,3 s | Modelo de dominio |
+| 4 | Arquitectura | solution-architect | Qwen3-8B + LoRA | 1 | 0 | 1 087 | 20,0 s | Arquitectura de solución |
+| 5 | Arquitectura | security-compliance | Qwen3-8B base | 1 | 0 | 1 180 | 19,9 s | Paquete de seguridad |
+| 6 | Ingeniería | api-designer | Qwen3-8B + LoRA | 1 | 0 | 847 | 16,8 s | OpenAPI 3.1 (`GET /v1/pedidos/{pedidoId}/estado`) |
+| 7 | Ingeniería | data-model | Qwen3-8B base | 3 | 2 | 3 417 | 59,9 s | DDL SQL (`up` y `down`) |
+| 8 | Ingeniería | backend-developer | Qwen3-32B-AWQ | 3 | 0 | 3 620 | 114,3 s | Servicio FastAPI (`servicio/app/main.py`) |
+| 9 | Calidad | test-case-generator | Qwen3-8B + LoRA | 1 | 0 | 2 167 | 62,9 s | Casos de prueba trazados a los criterios |
+| 10 | Calidad | qa-automation | Qwen3-32B-AWQ | 2 | 1 | 2 320 | 89,0 s | Suite pytest ejecutable |
+| 11 | Calidad | code-review | Qwen3-32B-AWQ | 3 | 0 | 1 981 | 47,3 s | Revisión de código (ruff, bandit y hallazgos) |
+| 12 | DevOps | cicd-pipeline | Qwen3-8B + LoRA | 2 | 1 | 3 100 | 54,8 s | 6 workflows de GitHub Actions (dev, staging, prod) |
+| 13 | DevOps | release-manager | Qwen3-8B base | 1 | 0 | 521 | 7,3 s | Plan de release con decisión go/no-go |
+| — | Transversal | governance | Sin modelo (reglas) | 34 veredictos | — | — | — | Un archivo `*.decision.json` por artefacto |
+
+Tiempo total de la corrida: **488 s (≈ 8 min)**.
+
+**4. Qué hicieron governance y el ciclo de calidad.** Así se ve el control en acción:
+
+- **data-model**, rondas 0 y 1: rechazado porque *"El DDL generado no se ejecuta en SQLite: FK pedido_id → pedido.pedido_id no existe"*. Con ese feedback lo corrigió y fue aprobado en la ronda 2.
+- **qa-automation**, ronda 0: rechazado porque *"Casos sin suite: TC-UNIT-001 … TC-UNIT-005"*. Aprobado en la ronda 1.
+- **cicd-pipeline**, ronda 0: rechazado porque el job que ejecuta pytest no hacía checkout del código. Aprobado en la ronda 1.
+- **Ciclo de calidad:** las pruebas de QA se ejecutaron contra el servicio. Ciclo 0: 8 pruebas fallidas → el backend se regeneró (remediación 1). Ciclo 1: 9 fallas y 1 hallazgo crítico de code-review → nueva remediación. Ciclo 2: quedaron 5 pruebas fallidas.
+- Todos los rechazos quedan auditables en `rechazos.jsonl`, y cada veredicto en `<artefacto>.decision.json`.
+
+**5. Resultado: release *no-go*, sin despliegue.** El plan de release (`release_plan.json`) evaluó su checklist y decidió no desplegar:
+
+| Criterio del release | Cumple | Evidencia |
+|---|---|---|
+| Pruebas automatizadas en verde | No | 5 de 10 pruebas fallidas |
+| 0 hallazgos críticos de revisión | Sí | Críticos: 0 |
+| Puertas de seguridad superadas | No | FIND-002, severidad mayor |
+| Pipeline de producción con puerta manual | Sí | PIPE-103 con GATE-303 manual |
+
+Telemetría: `deploy_skipped: no-go`. **El pipeline funcionó como debía:** no desplegó código que no pasaba sus pruebas.
+
+**6. Qué se corrigió después de esta corrida:**
+
+- Las 5 pruebas fallaban porque la suite de QA importaba un módulo inexistente (`app.dominio`), y eso contaba como defecto del servicio. Ahora una suite que no se puede importar se invalida y QA debe corregirla (corrección 11 de la prueba de humo F4).
+- El hallazgo de seguridad de severidad mayor bloqueaba el release. Se alineó con la política escrita: solo bloquea un hallazgo crítico; mayor y menor van al backlog con su remediación (corrección 12).
+
+**Dos aclaraciones para interpretar el ejemplo**
+
+- Es una **prueba de humo** en modo `GATES_MODE=auto`: los gates de aprobación se resolvieron automáticamente, sin personas. En el piloto F5 (`manual`) esos mismos gates esperan la decisión del autor (flujo de la sección 2.5).
+- Los artefactos de este ejemplo los generaron los modelos reales: el `provider` es `openai_compat` y el `model_id` es el adaptador o el modelo de la tabla. No intervino el proveedor `prueba_offline`.
 
 ## 3. Estructura del repositorio
 
@@ -283,7 +438,7 @@ tesis/
 ├── config/
 │   ├── dag.yaml                Orden de ejecución de los 16 agentes (con etapas en paralelo)
 │   ├── gates.yaml              Matriz RACI y nivel de riesgo por artefacto (modo manual/auto)
-│   └── providers.yaml          Qué modelo atiende a cada agente (mock, vLLM, adaptadores, maestro)
+│   └── providers.yaml          Qué modelo atiende a cada agente (prueba_offline, vLLM, adaptadores, maestro)
 ├── contracts/                  Esquemas comunes (solicitud de negocio, procedencia)
 ├── core/
 │   ├── orchestrator.py         Orquestador: DAG, reintentos, gates reanudables, bucle de calidad
@@ -293,7 +448,7 @@ tesis/
 │   ├── deploy.py               Empaquetado y despliegue a staging (GitHub API + Actions)
 │   ├── tools/sandbox.py        DDL en SQLite, servicio FastAPI generado, pytest, ruff, bandit
 │   ├── tools/rag.py            knowledge-rag (BM25)
-│   ├── adapters/               Proveedores de modelo (mock, OpenAI-compatible/vLLM, HF local, Ollama)
+│   ├── adapters/               Proveedores de modelo (prueba_offline, OpenAI-compatible/vLLM, HF local, Ollama)
 │   ├── envinfo.py              Registro de hardware y versiones en cada job
 │   └── telemetry.py            Eventos JSONL de cada ejecución (insumo de los indicadores)
 ├── data/
@@ -397,7 +552,7 @@ git clone https://github.com/javierrosado/tesis.git && cd tesis
 python -m venv .venv && source .venv/bin/activate      # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 pytest -q                                               # resultado esperado: 38 passed
-PIPELINE_PROVIDER=mock python scripts/run_pipeline.py --req SIM-P05-R001   # prueba del software con respuestas grabadas (ver 2.3); no usa el modelo
+PIPELINE_PROVIDER=prueba_offline python scripts/run_pipeline.py --req SIM-P05-R001   # prueba del software con artefactos predefinidos (ver 2.3); no usa ningún modelo
 ```
 
 ### 7.3 EDA (sin GPU, en Colab o local)

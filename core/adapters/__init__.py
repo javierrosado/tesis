@@ -4,9 +4,9 @@ from .base import ModelAdapter, ModelResponse
 
 def build_adapter(name: str, cfg: dict, repo_root) -> ModelAdapter:
     kind = cfg["adapter"]
-    if kind == "mock":
-        from .mock import MockAdapter
-        return MockAdapter(repo_root / cfg.get("fixtures", "tests/fixtures"), name)
+    if kind in ("prueba_offline", "mock"):          # "mock" es el nombre anterior (alias)
+        from .prueba_offline import PruebaOfflineAdapter
+        return PruebaOfflineAdapter(repo_root / cfg.get("fixtures", "tests/fixtures"), name)
     if kind == "anthropic":
         from .anthropic_adapter import AnthropicAdapter
         return AnthropicAdapter(cfg)

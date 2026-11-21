@@ -1,6 +1,6 @@
 # Pipeline multiagente de IA para el ciclo de vida del requerimiento de software
 
-Implementación de la tesis de **Maestría en Inteligencia Artificial (Universidad Nacional de Ingeniería, Perú)** de Javier Rosado.
+Implementación de la tesis de **Maestría en Inteligencia Artificial (Universidad Nacional de Ingeniería, Perú)** 
 
 Un requerimiento de negocio entra al pipeline y **16 agentes** lo transforman, dominio por dominio, en historias de usuario, arquitectura, API, modelo de datos, código, pruebas, pipeline de CI/CD y un plan de release. Cada artefacto pasa por un revisor automático (**governance**). Los de riesgo alto esperan la aprobación de una persona. Si el release sale *go*, el servicio se despliega en un repositorio de staging con GitHub Actions.
 

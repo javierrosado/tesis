@@ -157,6 +157,20 @@ Ejemplo de entorno registrado en un job (`core/envinfo.py`, 20/11/2026): `NVIDIA
 
 **Cómo se generaron los datos de entrenamiento (linaje):** `scripts/gen_seeds.py` crea requerimientos sintéticos → el modelo maestro `Qwen3-32B-AWQ` ejecuta el pipeline (`jobs/f2a_distill.py`) → governance acepta o rechaza cada salida → 1 165 ejemplos aprobados (`tesis-sft-final`) → re-filtrado con governance v2 (852) + 161 ejemplos de DevOps regenerados (`jobs/f2a_regen_agent.py`) = **1 013** (`tesis-sft-v2`). Las particiones son por requerimiento: no hay fuga entre train/val/test ni con el piloto (verificado en el notebook de EDA).
 
+### 6.1 Datos sintéticos y datos reales
+
+**Los datos sintéticos se usan solo para entrenar; todo lo que mide el impacto usa datos reales.** Detalle, justificación y referencias en [`docs/DATOS.md`](docs/DATOS.md).
+
+| Uso | Datos | Naturaleza |
+|---|---|---|
+| Entrenar y evaluar los adaptadores (F3) | `tesis-sft-v2` (semillas SIM-T01…T05 destiladas por el maestro) | Sintético, validado con JSON Schema y governance |
+| Línea base AS-IS (OE1) | `Linea_BaseV2.xlsx` | Real, anonimizado |
+| Piloto (OE4) | `data/requerimientos/SIM-P05-*` | Real (caso del Squad Fuerza de Ventas) |
+
+Por qué: no existe un corpus etiquetado con los contratos de estos agentes y los requerimientos de la Empresa son confidenciales; generar, filtrar y ajustar es el esquema de Self-Instruct (Wang et al., 2023) y de la destilación (Hsieh et al., 2023).
+
+Verificación de que el piloto no está en el entrenamiento (`python scripts/verificar_fuga.py`, ~5 s, sin GPU): 0 identificadores y 0 títulos en común; el requerimiento del piloto más parecido a uno de entrenamiento tiene similitud 0,655, menor que la que hay entre requerimientos de entrenamiento distintos (mediana 0,67). Resultado: **sin fuga**.
+
 **Adaptadores entrenados (públicos):** [qwen3-8b-product-analyst-lora](https://huggingface.co/jrosado1974/qwen3-8b-product-analyst-lora) · [qwen3-8b-solution-architect-lora](https://huggingface.co/jrosado1974/qwen3-8b-solution-architect-lora) · [qwen3-8b-api-designer-lora](https://huggingface.co/jrosado1974/qwen3-8b-api-designer-lora) · [qwen3-8b-test-case-generator-lora](https://huggingface.co/jrosado1974/qwen3-8b-test-case-generator-lora) · [qwen3-8b-cicd-pipeline-lora](https://huggingface.co/jrosado1974/qwen3-8b-cicd-pipeline-lora)
 
 ## 7. Cómo reproducir cada experimento
@@ -186,6 +200,7 @@ PIPELINE_PROVIDER=mock python scripts/run_pipeline.py --req SIM-P05-R001   # pip
 |---|---|---|
 | Línea base (OE1) | [eda_linea_base.ipynb](https://colab.research.google.com/github/javierrosado/tesis/blob/main/notebooks/eda_linea_base.ipynb) | 66,5 días · 45 % · 34 % · 1,0 · 0 % · 0 % / 30,9 % |
 | Dataset de entrenamiento | [eda_datasets_entrenamiento.ipynb](https://colab.research.google.com/github/javierrosado/tesis/blob/main/notebooks/eda_datasets_entrenamiento.ipynb) | 1 013 ejemplos · 100 % válidos · 0 requerimientos en común entre particiones |
+| Separación piloto / entrenamiento | `python scripts/verificar_fuga.py` (local, sin GPU) | 0 ids · 0 títulos · similitud máx. 0,655 · SIN FUGA |
 
 ### 7.4 Experimentos en GPU (Hugging Face Jobs)
 
@@ -318,7 +333,8 @@ python scripts/indicadores.py <carpeta>/telemetria/*.jsonl --md indicadores.md
 
 ## 12. Limitaciones conocidas
 
-- Los datos de entrenamiento son sintéticos y sus respuestas de referencia vienen del maestro: el techo del adaptador es el maestro filtrado por governance.
+- Los datos de entrenamiento son sintéticos (la línea base y el piloto son reales; ver [`docs/DATOS.md`](docs/DATOS.md)) y sus respuestas de referencia vienen del maestro: el techo del adaptador es el maestro filtrado por governance.
+- La partición de prueba de F3 también es sintética: F3 mide el efecto controlado del entrenamiento; la evidencia en contexto real la aporta el piloto.
 - Particiones de prueba pequeñas (9–24 casos por agente).
 - Qwen3-8B es de la misma familia que el maestro, lo que le da ventaja en el ajuste fino.
 - Los tres agentes de código usan el maestro sin ajustar; ahí no se mide el efecto del entrenamiento.

@@ -22,6 +22,7 @@ Registro cronológico de actividades, decisiones y dificultades de la implementa
 | 20/11/2026 | F4 | Flujo de gates manuales en GPU | **Opción A:** el autor decide los gates en lote; el dictamen de IA se registra aparte | Se descartó que la IA apruebe en nombre del autor (integridad de los datos) |
 | 20/11/2026 | Selección | Comparación de modelos base | Qwen3-8B 82,8 % vs. Llama-3.1-8B 60,9 % vs. Mistral-7B 72,4 % (McNemar p = 0,0002 y 0,039) | — |
 | 20/11/2026 | Semana 10 | Reproducibilidad | Versiones fijadas, registro de entorno en cada job, notebooks de EDA, README detallado | Reproducción del adaptador de DevOps: 9/9 (idéntico a F3) |
+| 20/11/2026 | Datos | Documentación de fuentes sintéticas y reales; verificación de fuga piloto/entrenamiento (`scripts/verificar_fuga.py`) | 0 ids y 0 títulos en común; similitud máx. 0,655 < 0,67 (referencia entre requerimientos de entrenamiento): sin fuga | — |
 | 23/11–04/12/2026 | F5 | Piloto real con los 30 requerimientos del squad | Pendiente | — |
 
 ## Decisiones metodológicas (resumen)
@@ -36,3 +37,4 @@ Registro cronológico de actividades, decisiones y dificultades de la implementa
 | D-F4-1 | Modelo maestro para los agentes de código | El 8B base no producía código que pasara las pruebas |
 | Opción A | Decisión humana en lote con dictamen de IA registrado aparte | Reduce la carga sin falsear el dato humano; permite medir la concordancia humano–IA |
 | Release | Solo un hallazgo de seguridad crítico bloquea; mayor y menor van al backlog | Alineado con la política escrita ("puertas de seguridad definidas") |
+| Datos | Sintéticos solo para entrenar; línea base y piloto con datos reales | No existe corpus etiquetado y los requerimientos de la Empresa son confidenciales; la medición debe hacerse sobre datos reales |

@@ -1,6 +1,6 @@
 # /// script
 # requires-python = ">=3.11"
-# dependencies = ["vllm", "jsonschema", "PyYAML", "huggingface_hub", "openapi-spec-validator"]
+# dependencies = ["vllm==0.34.0", "xgrammar==0.2.8", "huggingface_hub==2.4.0", "jsonschema==4.26.0", "openapi-spec-validator==0.9.0", "PyYAML"]
 # ///
 """F3 · Evaluación en la partición test: modelo base (Qwen3-8B) vs. su adaptador LoRA por agente.
 Una sola generación por ejemplo (sin reintentos ni feedback) para medir la calidad en primera pasada:

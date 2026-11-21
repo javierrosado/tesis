@@ -1,6 +1,6 @@
 # /// script
 # requires-python = ">=3.11"
-# dependencies = ["vllm", "jsonschema", "PyYAML", "huggingface_hub", "openapi-spec-validator", "fastapi", "httpx", "uvicorn", "ruff", "bandit", "pytest"]
+# dependencies = ["vllm==0.34.0", "xgrammar==0.2.8", "huggingface_hub==2.4.0", "jsonschema==4.26.0", "openapi-spec-validator==0.9.0", "PyYAML", "fastapi", "httpx", "uvicorn", "ruff", "bandit", "pytest"]
 # ///
 """Corrida (o reanudación) del pipeline de 16 agentes sobre uno o varios requerimientos, en HF Jobs.
 

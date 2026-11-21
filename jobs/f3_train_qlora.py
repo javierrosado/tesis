@@ -1,6 +1,6 @@
 # /// script
 # requires-python = ">=3.11"
-# dependencies = ["torch", "transformers>=4.51,<4.57", "peft>=0.13", "trl>=0.19,<0.24", "bitsandbytes", "datasets", "accelerate", "huggingface_hub"]
+# dependencies = ["torch", "transformers==4.56.2", "peft>=0.13", "trl>=0.19,<0.24", "bitsandbytes", "datasets", "accelerate", "huggingface_hub"]
 # ///
 """F3 · QLoRA de los agentes entrenables (uno por dominio) sobre Qwen3-8B.
 Datos: SFT_REPO (prompt de inferencia → salida aprobada por governance). Pérdida solo sobre la salida (completion).

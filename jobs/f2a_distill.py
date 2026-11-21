@@ -1,6 +1,6 @@
 # /// script
 # requires-python = ">=3.11"
-# dependencies = ["vllm", "jsonschema", "PyYAML", "huggingface_hub", "openapi-spec-validator"]
+# dependencies = ["vllm==0.34.0", "xgrammar==0.2.8", "huggingface_hub==2.4.0", "jsonschema==4.26.0", "openapi-spec-validator==0.9.0", "PyYAML"]
 # ///
 """F2-A · Destilación: el maestro open-weight (Qwen3-32B-AWQ, servido con vLLM dentro del job) redacta
 briefs de entrenamiento a partir de semillas y ejecuta el pipeline completo con governance determinista.

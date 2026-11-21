@@ -13,7 +13,7 @@ Todo funciona con **modelos de lenguaje de pesos abiertos** (sin APIs comerciale
 ## Índice
 
 1. [Objetivos de la tesis y dónde está la evidencia](#1-objetivos-de-la-tesis-y-dónde-está-la-evidencia)
-2. [Arquitectura](#2-arquitectura)
+2. [Arquitectura](#2-arquitectura): [infraestructura](#21-infraestructura-dónde-corre-cada-componente) · [pipeline](#22-arquitectura-lógica-del-pipeline) · [¿qué es mock?](#23-qué-significa-mock-y-por-qué-no-implica-datos-falsos) · [jobs](#24-jobs-de-gpu-qué-es-un-job-y-para-qué-se-ejecuta-cada-uno) · [otros flujos](#25-otros-flujos)
 3. [Estructura del repositorio](#3-estructura-del-repositorio)
 4. [Hardware utilizado](#4-hardware-utilizado)
 5. [Software y versiones](#5-software-y-versiones)
@@ -37,6 +37,92 @@ Todo funciona con **modelos de lenguaje de pesos abiertos** (sin APIs comerciale
 | **OE4** · Verificar en un piloto | Pruebas de humo, gates manuales y despliegue real hechos; piloto con 30 requerimientos programado | [`runs/MANIFEST.md`](runs/MANIFEST.md) · [`scripts/indicadores.py`](scripts/indicadores.py) |
 
 ## 2. Arquitectura
+
+La arquitectura tiene dos vistas. La **infraestructura** (2.1) muestra dónde corre cada cosa: tu PC, GitHub, Hugging Face y Colab. La **arquitectura lógica** (2.2) muestra cómo se encadenan los 16 agentes dentro del pipeline. La sección 2.3 aclara qué significa *mock* en este repositorio, la 2.4 explica qué hace cada job de GPU y la 2.5 describe los demás flujos (datos y entrenamiento, piloto con aprobaciones humanas, CI, EDA e indicadores).
+
+### 2.1 Infraestructura: dónde corre cada componente
+
+```mermaid
+flowchart LR
+  subgraph PC["PC del autor · Windows, sin GPU"]
+    DEV["Código y git<br/>pytest con proveedor mock<br/>CLI hf jobs"]
+  end
+
+  subgraph GH["GitHub"]
+    REPO["javierrosado/tesis<br/>código · PRs · bitácora · MANIFEST<br/>Excel de línea base"]
+    CI["GitHub Actions · CI<br/>38 pruebas con mock"]
+    SBX["javierrosado/tesis-sandbox<br/>rama req/ID por requerimiento"]
+    CD["GitHub Actions · CD<br/>test + deploy a staging"]
+  end
+
+  subgraph COLAB["Google Colab · sin GPU"]
+    NB["Notebooks de EDA<br/>línea base y dataset"]
+  end
+
+  subgraph HF["Hugging Face"]
+    subgraph HUB["HF Hub · almacenamiento"]
+      BASE["Modelos base de Qwen<br/>Qwen3-8B · Qwen3-32B-AWQ"]
+      LORA["5 adaptadores LoRA<br/>jrosado1974/qwen3-8b-*-lora"]
+      DS["Datasets<br/>tesis-sft-v2 · tesis-runs"]
+    end
+    subgraph JOBS["HF Jobs · GPU L40S 48 GB o A100 80 GB"]
+      V8["vLLM :8000<br/>Qwen3-8B + 5 LoRA"]
+      V32["vLLM :8001<br/>Qwen3-32B-AWQ maestro"]
+      PIPE["Pipeline de 16 agentes<br/>destilación · QLoRA · evaluación"]
+    end
+  end
+
+  DEV -->|"1 · PR aprobado por el autor"| REPO
+  REPO -->|"2 · cada push"| CI
+  DEV -->|"3 · hf jobs uv run"| JOBS
+  REPO -->|"4 · el job descarga la rama"| PIPE
+  BASE -->|"5 · pesos"| V8
+  BASE --> V32
+  LORA -->|"5 · adaptadores"| V8
+  PIPE <-->|"localhost"| V8
+  PIPE <-->|"localhost"| V32
+  PIPE -->|"6 · dataset, LoRA, métricas, telemetría"| DS
+  PIPE -->|"6 · LoRA entrenados"| LORA
+  PIPE -->|"7 · código generado aprobado"| SBX
+  SBX --> CD
+  REPO -->|"8 · Excel y notebooks"| NB
+  DS -->|"8 · dataset público"| NB
+  DS -->|"9 · telemetría → indicadores.py"| DEV
+```
+
+**Componentes**
+
+| Componente | Qué es | Para qué se usa en la tesis | Qué ejecuta o guarda | Evidencia |
+|---|---|---|---|---|
+| **PC del autor** | Windows x64 sin GPU, con Python 3.10 | Escribir código, correr las pruebas, lanzar los jobs de GPU y calcular los indicadores | `pytest` con proveedor mock, CLI `hf jobs`, `scripts/indicadores.py` | 38 pruebas en verde |
+| **GitHub · `javierrosado/tesis`** | Repositorio público (este) | Código fuente, control de versiones y trazabilidad | Agentes, orquestador, jobs, notebooks, `docs/BITACORA.md`, `runs/MANIFEST.md`, Excel de línea base | PR #1 a #9, cada uno aprobado por el autor |
+| **GitHub Actions · CI** | Runner `ubuntu-latest`, sin GPU | Comprobar en cada cambio que el código del pipeline funciona | `pytest -q` y un dry-run con el proveedor mock (ver 2.3) | Pestaña *Actions* del repo |
+| **Google Colab** | Notebooks en la nube, sin GPU | Que cualquier lector reproduzca el EDA sin instalar nada | `eda_linea_base.ipynb` y `eda_datasets_entrenamiento.ipynb` | Botones "Abrir en Colab" (7.3) |
+| **HF Hub** | Almacenamiento de modelos y datos de Hugging Face | Descargar los modelos base y publicar lo que produce la tesis | Pesos de `Qwen/*` (de la organización Qwen); 5 LoRA, `tesis-sft-v2` y `tesis-runs` (públicos, cuenta `jrosado1974`) | Enlaces en la sección 6 |
+| **HF Jobs** | Contenedores con GPU que se pagan por segundo y se apagan al terminar | **Toda ejecución real de modelos:** destilación, entrenamiento QLoRA, evaluación, comparación de modelos y pipeline | Dos servidores vLLM en el mismo contenedor (8B + LoRA en `:8000`, maestro 32B en `:8001`) y el pipeline, que les habla por `localhost` | 40 jobs con su id en `runs/MANIFEST.md`; hardware y versiones en `entorno.json` |
+| **GitHub · `tesis-sandbox`** | Repositorio de staging | Desplegar el servicio que generan los agentes | Una rama `req/<ID>` por requerimiento | Run 44764311596: test ✔ y deploy ✔ |
+| **GitHub Actions · CD** | Runner del sandbox | Probar y desplegar el código generado | Job `test` (pytest) y luego `deploy` | Pestaña *Actions* del sandbox |
+
+**Secuencia de punta a punta** (los números coinciden con las flechas del diagrama)
+
+1. **Desarrollo.** El autor programa en su PC, abre un pull request y lo aprueba; solo así cambia `main`.
+2. **Integración continua.** GitHub Actions corre las 38 pruebas con el proveedor mock: verifica el código, no el modelo (2.3).
+3. **Lanzamiento.** Desde la PC se lanza un job: `hf jobs uv run --flavor a100-large ... jobs/<script>.py`.
+4. **Código versionado.** El job descarga de GitHub la rama indicada; así cada resultado queda atado a una versión del código.
+5. **Modelos.** vLLM descarga de HF Hub los pesos base de Qwen y los adaptadores LoRA, y los sirve dentro del contenedor.
+6. **Resultados.** Según la fase, el job publica en HF Hub el dataset destilado (F2-A), los adaptadores (F3), las métricas de evaluación o la telemetría del pipeline (F4, F5). El job queda registrado en `runs/MANIFEST.md`.
+7. **Despliegue.** Si release-manager decide *go*, el código generado se sube a `tesis-sandbox` y GitHub Actions ejecuta `test` y `deploy`.
+8. **EDA reproducible.** Colab lee el Excel desde GitHub y el dataset desde HF Hub, y recalcula las cifras de la línea base y del dataset.
+9. **Indicadores.** `scripts/indicadores.py` lee la telemetría descargada y produce las tablas de la tesis.
+
+**Por qué esta distribución**
+
+- **La PC no tiene GPU.** Qwen3-8B necesita unos 16 GB de memoria de GPU solo para sus pesos, y el maestro de 32B unos 20 GB más. Por eso nada que use un modelo corre en la PC.
+- **HF Jobs en vez de Colab para las corridas reales:** se lanza por línea de comandos, no depende de una sesión del navegador que se puede cortar y registra el id, el hardware y las versiones de cada corrida. Costo total del proyecto: ≈ USD 27,13.
+- **Colab solo para el EDA:** es la forma más simple de que un lector reproduzca las cifras sin instalar nada.
+- **Sin APIs comerciales.** Todos los modelos son de pesos abiertos y corren dentro del contenedor; ninguna llamada sale a un proveedor externo.
+
+### 2.2 Arquitectura lógica del pipeline
 
 ```
  Requerimiento (brief + restricciones)
@@ -67,6 +153,126 @@ Todo funciona con **modelos de lenguaje de pesos abiertos** (sin APIs comerciale
 | Transversales | governance, skill-orchestrator, knowledge-rag | Sin modelo de lenguaje (reglas, orquestador, BM25) |
 
 Los modelos se sirven con **vLLM** (multi-LoRA y salida restringida por JSON Schema). El modelo es un recurso inyectado por configuración: cambiar de proveedor es editar `config/providers.yaml`.
+
+### 2.3 ¿Qué significa *mock*? (y por qué no implica datos falsos)
+
+*Mock* es el nombre de uno de los proveedores de modelo de `config/providers.yaml`. **No es un tipo de dato ni una simulación del piloto:** es un sustituto del LLM que devuelve respuestas fijas guardadas en `tests/fixtures/`. Se usa con un único fin: **probar el software del pipeline** (orquestador, contratos, governance, reintentos, telemetría) de forma rápida, gratuita y repetible.
+
+| | Proveedor `mock` | Proveedor `vllm_local` (real) |
+|---|---|---|
+| Qué responde | Un JSON guardado en `tests/fixtures/<agente>/<req>.json` | Qwen3-8B (con su LoRA) o Qwen3-32B-AWQ, generando en GPU |
+| Dónde corre | PC del autor y GitHub Actions, sin GPU | HF Jobs (L40S o A100) |
+| Qué demuestra | Que **el código** funciona: el DAG avanza, governance rechaza lo inválido, hay reintento y escalamiento, la telemetría se escribe | Qué tan bien **el modelo** hace la tarea: aprobación en ronda 0, métricas F5, McNemar, indicadores del piloto |
+| Costo y tiempo | USD 0 · ~2 min | Por segundo de GPU · minutos a horas |
+| ¿Sus resultados van a la tesis? | **No** | **Sí** |
+| Corridas en el MANIFEST | 2 de 44 (F0 y una verificación local de F4) | 40 de 44 en GPU; las otras 2 son pasos locales de datos (fusión y re-filtro) |
+
+**Por qué existe.** El runner de GitHub Actions no tiene GPU. Además, una prueba de software debe dar siempre el mismo resultado: si se usara el LLM real, una variación de un caso del modelo haría fallar la prueba sin que el código tenga ningún error. Con mock, si una prueba falla, el error está en el código. Es la práctica habitual de pruebas unitarias con dobles de prueba.
+
+**Cómo comprobar qué proveedor produjo cada dato.** Cada evento de telemetría registra `provider` y `model_id` (`core/telemetry.py`, `core/model_port.py`). En los 24 archivos de telemetría publicados en `tesis-runs` (revisados el 20/11/2026) aparecen `openai_compat` (vLLM, con `model_id` igual al nombre del adaptador, `Qwen/Qwen3-8B` o `Qwen/Qwen3-32B-AWQ`), `deterministic` (governance) y `hf_local` (F1). **Ningún evento tiene `provider = mock`.**
+
+**Un caso a tener en cuenta.** La tubería de despliegue a `tesis-sandbox` (run 44764311596) se validó con artefactos del mock para probarla sin gastar GPU. En las pruebas de humo con el modelo real ningún release salió *go*, porque las pruebas del código generado no pasaron. El despliegue de código generado por el LLM se demostrará en el piloto F5, cuando un requerimiento obtenga release *go*.
+
+### 2.4 Jobs de GPU: qué es un job y para qué se ejecuta cada uno
+
+Un **job** es un contenedor con GPU que Hugging Face crea a pedido, ejecuta un script de `jobs/` y destruye al terminar. Se cobra por segundo. Es la única pieza de la arquitectura donde corren los modelos de lenguaje. Se lanza desde la PC con un comando como este (los comandos completos están en 7.4):
+
+```bash
+hf jobs uv run --flavor a100-large --secrets HF_TOKEN -e BRANCH=main -e PILOT=piloto1 -e ALL=1 \
+  -e RUNS_REPO=jrosado1974/tesis-runs -e "ADAPTERS=$AD" jobs/run_pipeline_job.py   # $AD: lista de adaptadores (ver 7.4)
+```
+
+**Qué pasa dentro de un job** (igual en todos los scripts)
+
+```mermaid
+sequenceDiagram
+  autonumber
+  participant PC as PC del autor
+  participant J as HF Jobs (contenedor GPU)
+  participant G as GitHub
+  participant H as HF Hub
+  PC->>J: hf jobs uv run (script + variables)
+  J->>J: uv instala las versiones fijadas en la cabecera del script
+  J->>G: descarga la rama indicada (BRANCH)
+  J->>J: registra GPU, driver y versiones (core/envinfo.py)
+  J->>H: descarga modelos base, adaptadores y datos
+  J->>J: levanta vLLM y espera /health
+  J->>J: ejecuta la tarea (destilar, entrenar, evaluar o correr el pipeline)
+  J->>H: publica resultados, entorno.json y telemetría
+  J-->>PC: logs con hf jobs logs ID, y el contenedor se apaga
+  PC->>G: registra el job en runs/MANIFEST.md (PR)
+```
+
+**Los 8 scripts de jobs**
+
+| Script | Fase | Para qué se ejecuta | GPU | Lee | Produce | Corrida de ejemplo (MANIFEST) |
+|---|---|---|---|---|---|---|
+| `f1_smoke.py` | F1 | Primera prueba del vertical Discovery con un modelo real | L40S | Rama + Qwen3-8B | Telemetría en `tesis-runs` | `6afe64ae…` |
+| `run_vllm.py` | Pruebas | Ejecutor genérico del pipeline con un modelo servido por vLLM; antecesor de `run_pipeline_job.py`, útil para probar un modelo distinto | L40S | Requerimientos del repo | Telemetría y salidas | — |
+| `f2a_distill.py` | F2-A | **Generar los datos de entrenamiento:** el maestro ejecuta el pipeline sobre semillas sintéticas y solo se guardan las salidas que aprueba governance | L40S | Semillas + Qwen3-32B-AWQ | Datasets `tesis-sft-*` | `6aff353d…` |
+| `f2a_regen_agent.py` | F3 | Regenerar las salidas de **un** agente cuando una regla nueva de governance invalida las anteriores (se usó para DevOps) | A100 | Entradas ya destiladas + maestro | Archivos de ese agente en `tesis-sft-v2` | `6aff96b6…` + `6affa99f…` (reanudada) |
+| `f3_train_qlora.py` | F3 | **Entrenar** un adaptador QLoRA por agente entrenable | L40S | `tesis-sft-v2` + Qwen3-8B | 5 repos `qwen3-8b-*-lora` | `6aff880d…` |
+| `f3_eval.py` | F3 | **Evaluar** base contra LoRA en la partición de prueba (una generación, temperatura 0) | L40S | Test + adaptadores | Métricas en `tesis-runs` | `6affa998…`, `6affc5d4…` |
+| `compare_models.py` | Selección | **Elegir el modelo base:** Qwen3-8B frente a Llama-3.1-8B y Mistral-7B con los mismos casos | L40S | Test de `tesis-sft-v2` | `runs/compare_models/<job>/` | `6b00d0d3…` |
+| `run_pipeline_job.py` | F4–F5 | **Ejecutar el pipeline de 16 agentes** sobre los requerimientos del piloto. Es reanudable: corre hasta el siguiente gate humano pendiente o hasta el despliegue | A100 (8B + maestro) | Estado del piloto + decisiones humanas | Estado, telemetría y despliegue al sandbox | `6b0068f4…` |
+
+### 2.5 Otros flujos
+
+**Flujo de datos y entrenamiento (F2-A → F3).** Cómo se pasa de semillas sintéticas a adaptadores evaluados.
+
+```mermaid
+flowchart LR
+  S["gen_seeds.py<br/>semillas SIM-T01…T05"] --> D["f2a_distill.py<br/>maestro Qwen3-32B-AWQ"]
+  D --> G{"governance<br/>contrato + F5"}
+  G -->|rechazo| X["descartado"]
+  G -->|aprobado| F["tesis-sft-final<br/>1 165 ejemplos"]
+  F --> R["refilter_dataset.py<br/>governance v2 · 852"]
+  F --> RG["f2a_regen_agent.py<br/>DevOps · 161"]
+  R --> V["tesis-sft-v2<br/>1 013 ejemplos"]
+  RG --> V
+  V --> VF["verificar_fuga.py<br/>sin fuga con el piloto"]
+  V --> T["f3_train_qlora.py<br/>5 adaptadores"]
+  T --> E["f3_eval.py<br/>base vs LoRA · McNemar"]
+  V --> C["compare_models.py<br/>Qwen vs Llama vs Mistral"]
+```
+
+**Flujo del piloto con aprobaciones humanas (F5).** El pipeline se detiene en cada artefacto de riesgo alto y espera la decisión del autor. Las decisiones se registran con su hora real; el dictamen de IA se guarda aparte y nunca reemplaza la decisión humana (opción A).
+
+```mermaid
+sequenceDiagram
+  autonumber
+  participant A as Autor (Javier)
+  participant IA as Asistente de IA
+  participant PC as PC (scripts)
+  participant J as HF Jobs
+  participant H as HF Hub (tesis-runs)
+  participant S as tesis-sandbox
+  PC->>J: run_pipeline_job.py (PILOT=piloto1, ALL=1)
+  J->>H: restaura estado y decisiones previas
+  J->>J: agentes + governance hasta el siguiente gate de riesgo alto
+  J->>H: publica estado, gates pendientes y telemetría
+  Note over A,IA: Ventanas de 09:00 y 17:00
+  IA->>H: lee los gates pendientes (pilot_control.py pendientes)
+  IA->>A: dictamen por artefacto (resumen, hallazgos, recomendación)
+  A->>PC: decide en lote: aprobar o devolver con motivo
+  PC->>H: pilot_control.py lote (hora real, hash, dictamen_ia aparte)
+  PC->>J: relanza run_pipeline_job.py
+  J->>H: lee las decisiones y continúa
+  alt release go
+    J->>S: push a la rama req/ID
+    S->>S: GitHub Actions: test → deploy
+  else devuelto o no-go
+    J->>H: el agente corrige con el feedback (vuelve al gate)
+  end
+  PC->>H: descarga la telemetría
+  PC->>PC: indicadores.py → tablas de la tesis
+```
+
+**Flujo de integración continua.** En cada push o pull request, GitHub Actions instala `requirements.txt`, corre `pytest -q` (38 pruebas) y un dry-run del vertical Discovery con el proveedor mock. Sirve para detectar errores de código antes del merge. No usa GPU ni modelos (2.3).
+
+**Flujo de reproducción del EDA.** El lector abre un notebook en Colab. El notebook descarga el Excel desde GitHub o el dataset desde HF Hub, y recalcula las cifras publicadas sin GPU (7.3).
+
+**Flujo de indicadores.** `scripts/indicadores.py` lee los JSONL de telemetría (cada evento trae `agent`, `provider`, `model_id`, tokens y latencia) y agrupa por clase de modelo: `lora`, `base`, `maestro` y `determinista`. Produce las tablas de la tesis en Markdown o CSV.
 
 ## 3. Estructura del repositorio
 
@@ -157,6 +363,20 @@ Ejemplo de entorno registrado en un job (`core/envinfo.py`, 20/11/2026): `NVIDIA
 
 **Cómo se generaron los datos de entrenamiento (linaje):** `scripts/gen_seeds.py` crea requerimientos sintéticos → el modelo maestro `Qwen3-32B-AWQ` ejecuta el pipeline (`jobs/f2a_distill.py`) → governance acepta o rechaza cada salida → 1 165 ejemplos aprobados (`tesis-sft-final`) → re-filtrado con governance v2 (852) + 161 ejemplos de DevOps regenerados (`jobs/f2a_regen_agent.py`) = **1 013** (`tesis-sft-v2`). Las particiones son por requerimiento: no hay fuga entre train/val/test ni con el piloto (verificado en el notebook de EDA).
 
+### 6.1 Datos sintéticos y datos reales
+
+**Los datos sintéticos se usan solo para entrenar; todo lo que mide el impacto usa datos reales.** Detalle, justificación y referencias en [`docs/DATOS.md`](docs/DATOS.md).
+
+| Uso | Datos | Naturaleza |
+|---|---|---|
+| Entrenar y evaluar los adaptadores (F3) | `tesis-sft-v2` (semillas SIM-T01…T05 destiladas por el maestro) | Sintético, validado con JSON Schema y governance |
+| Línea base AS-IS (OE1) | `Linea_BaseV2.xlsx` | Real, anonimizado |
+| Piloto (OE4) | `data/requerimientos/SIM-P05-*` | Real (caso del Squad Fuerza de Ventas) |
+
+Por qué: no existe un corpus etiquetado con los contratos de estos agentes y los requerimientos de la Empresa son confidenciales; generar, filtrar y ajustar es el esquema de Self-Instruct (Wang et al., 2023) y de la destilación (Hsieh et al., 2023).
+
+Verificación de que el piloto no está en el entrenamiento (`python scripts/verificar_fuga.py`, ~5 s, sin GPU): 0 identificadores y 0 títulos en común; el requerimiento del piloto más parecido a uno de entrenamiento tiene similitud 0,655, menor que la que hay entre requerimientos de entrenamiento distintos (mediana 0,67). Resultado: **sin fuga**.
+
 **Adaptadores entrenados (públicos):** [qwen3-8b-product-analyst-lora](https://huggingface.co/jrosado1974/qwen3-8b-product-analyst-lora) · [qwen3-8b-solution-architect-lora](https://huggingface.co/jrosado1974/qwen3-8b-solution-architect-lora) · [qwen3-8b-api-designer-lora](https://huggingface.co/jrosado1974/qwen3-8b-api-designer-lora) · [qwen3-8b-test-case-generator-lora](https://huggingface.co/jrosado1974/qwen3-8b-test-case-generator-lora) · [qwen3-8b-cicd-pipeline-lora](https://huggingface.co/jrosado1974/qwen3-8b-cicd-pipeline-lora)
 
 ## 7. Cómo reproducir cada experimento
@@ -177,7 +397,7 @@ git clone https://github.com/javierrosado/tesis.git && cd tesis
 python -m venv .venv && source .venv/bin/activate      # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 pytest -q                                               # resultado esperado: 38 passed
-PIPELINE_PROVIDER=mock python scripts/run_pipeline.py --req SIM-P05-R001   # pipeline completo con respuestas grabadas
+PIPELINE_PROVIDER=mock python scripts/run_pipeline.py --req SIM-P05-R001   # prueba del software con respuestas grabadas (ver 2.3); no usa el modelo
 ```
 
 ### 7.3 EDA (sin GPU, en Colab o local)
@@ -186,6 +406,7 @@ PIPELINE_PROVIDER=mock python scripts/run_pipeline.py --req SIM-P05-R001   # pip
 |---|---|---|
 | Línea base (OE1) | [eda_linea_base.ipynb](https://colab.research.google.com/github/javierrosado/tesis/blob/main/notebooks/eda_linea_base.ipynb) | 66,5 días · 45 % · 34 % · 1,0 · 0 % · 0 % / 30,9 % |
 | Dataset de entrenamiento | [eda_datasets_entrenamiento.ipynb](https://colab.research.google.com/github/javierrosado/tesis/blob/main/notebooks/eda_datasets_entrenamiento.ipynb) | 1 013 ejemplos · 100 % válidos · 0 requerimientos en común entre particiones |
+| Separación piloto / entrenamiento | `python scripts/verificar_fuga.py` (local, sin GPU) | 0 ids · 0 títulos · similitud máx. 0,655 · SIN FUGA |
 
 ### 7.4 Experimentos en GPU (Hugging Face Jobs)
 
@@ -318,7 +539,8 @@ python scripts/indicadores.py <carpeta>/telemetria/*.jsonl --md indicadores.md
 
 ## 12. Limitaciones conocidas
 
-- Los datos de entrenamiento son sintéticos y sus respuestas de referencia vienen del maestro: el techo del adaptador es el maestro filtrado por governance.
+- Los datos de entrenamiento son sintéticos (la línea base y el piloto son reales; ver [`docs/DATOS.md`](docs/DATOS.md)) y sus respuestas de referencia vienen del maestro: el techo del adaptador es el maestro filtrado por governance.
+- La partición de prueba de F3 también es sintética: F3 mide el efecto controlado del entrenamiento; la evidencia en contexto real la aporta el piloto.
 - Particiones de prueba pequeñas (9–24 casos por agente).
 - Qwen3-8B es de la misma familia que el maestro, lo que le da ventaja en el ajuste fino.
 - Los tres agentes de código usan el maestro sin ajustar; ahí no se mide el efecto del entrenamiento.

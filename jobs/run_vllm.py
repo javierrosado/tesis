@@ -1,6 +1,6 @@
 # /// script
 # requires-python = ">=3.11"
-# dependencies = ["vllm", "jsonschema", "PyYAML", "huggingface_hub", "openapi-spec-validator"]
+# dependencies = ["vllm==0.34.0", "xgrammar==0.2.8", "huggingface_hub==2.4.0", "jsonschema==4.26.0", "openapi-spec-validator==0.9.0", "PyYAML"]
 # ///
 """Ejecuta el pipeline sobre uno o varios requerimientos con un modelo open-weight servido por vLLM
 dentro del job (sin API keys). Es el ejecutor de las pruebas de humo y del piloto.

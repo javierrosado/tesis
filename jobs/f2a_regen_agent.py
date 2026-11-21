@@ -1,6 +1,6 @@
 # /// script
 # requires-python = ">=3.11"
-# dependencies = ["vllm", "jsonschema", "PyYAML", "huggingface_hub", "openapi-spec-validator"]
+# dependencies = ["vllm==0.34.0", "xgrammar==0.2.8", "huggingface_hub==2.4.0", "jsonschema==4.26.0", "openapi-spec-validator==0.9.0", "PyYAML"]
 # ///
 """Regenera con el maestro las salidas de UN agente reutilizando las entradas ya destiladas (mismo payload y
 conocimiento recuperado), con el prompt y el schema vigentes y el bucle de governance del orquestador

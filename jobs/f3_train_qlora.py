@@ -1,6 +1,6 @@
 # /// script
 # requires-python = ">=3.11"
-# dependencies = ["torch", "transformers>=4.51,<4.57", "peft>=0.13", "trl>=0.19,<0.24", "bitsandbytes", "datasets", "accelerate", "huggingface_hub"]
+# dependencies = ["torch", "transformers==4.56.2", "peft>=0.13", "trl>=0.19,<0.24", "bitsandbytes", "datasets", "accelerate", "huggingface_hub"]
 # ///
 """F3 · QLoRA de los agentes entrenables (uno por dominio) sobre Qwen3-8B.
 Datos: SFT_REPO (prompt de inferencia → salida aprobada por governance). Pérdida solo sobre la salida (completion).
@@ -13,6 +13,8 @@ from huggingface_hub import HfApi, hf_hub_download, whoami
 from peft import LoraConfig, prepare_model_for_kbit_training
 from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
 from trl import SFTConfig, SFTTrainer
+from importlib import metadata
+print("ENTORNO", {p: metadata.version(p) for p in ("torch", "transformers", "peft", "trl", "bitsandbytes", "accelerate", "datasets")}, torch.cuda.get_device_name(0) if torch.cuda.is_available() else "cpu", flush=True)
 
 BASE = os.environ.get("BASE", "Qwen/Qwen3-8B"); SFT = os.environ["SFT_REPO"]
 AGENTS = os.environ.get("AGENTS", "product-analyst-agent,solution-architect-agent,api-designer-agent,test-case-generator-agent,cicd-pipeline-agent").split(",")

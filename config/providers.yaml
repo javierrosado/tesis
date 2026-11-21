@@ -1,19 +1,23 @@
 # Único archivo que cambia al migrar de proveedor de modelo.
 # Los agentes declaran capacidades (requires); aquí se decide qué adaptador las satisface.
 #
-# Uso:  PIPELINE_PROVIDER=mock python scripts/run_pipeline.py --req SIM-P05-R001
+# Uso:  PIPELINE_PROVIDER=prueba_offline python scripts/run_pipeline.py --req SIM-P05-R001
 #       (la variable de entorno sobreescribe "default")
 #
 # Fase 1 (pruebas internas, NO entra en la tesis): default: anthropic
-# Fase 2 (piloto reportado en 3.1.3):              default: hf_local
+# Fase 2 (piloto reportado en 3.1.3):              vllm_local (jobs/run_pipeline_job.py)
 # Fase 3 (ablación con fine-tuning):               overrides.product-analyst-agent.adapter_weights
 
-default: mock
+default: prueba_offline
 
 providers:
-  mock:
-    adapter: mock
-    fixtures: tests/fixtures          # respuestas grabadas; sirve para CI y dry-run sin red
+  prueba_offline:                      # sin modelo: artefactos de ejemplo predefinidos (tests/fixtures); solo para probar el software (CI, dry-run)
+    adapter: prueba_offline
+    fixtures: tests/fixtures
+
+  mock:                                # nombre anterior de prueba_offline (alias, se mantiene por compatibilidad)
+    adapter: prueba_offline
+    fixtures: tests/fixtures
 
   anthropic:                           # solo desarrollo interno
     adapter: anthropic

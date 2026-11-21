@@ -23,6 +23,7 @@ Registro cronológico de actividades, decisiones y dificultades de la implementa
 | 20/11/2026 | Selección | Comparación de modelos base | Qwen3-8B 82,8 % vs. Llama-3.1-8B 60,9 % vs. Mistral-7B 72,4 % (McNemar p = 0,0002 y 0,039) | — |
 | 20/11/2026 | Semana 10 | Reproducibilidad | Versiones fijadas, registro de entorno en cada job, notebooks de EDA, README detallado | Reproducción del adaptador de DevOps: 9/9 (idéntico a F3) |
 | 20/11/2026 | Datos | Documentación de fuentes sintéticas y reales; verificación de fuga piloto/entrenamiento (`scripts/verificar_fuga.py`) | 0 ids y 0 títulos en común; similitud máx. 0,655 < 0,67 (referencia entre requerimientos de entrenamiento): sin fuga | — |
+| 20/11/2026 | Repositorio | El proveedor de pruebas `mock` se renombra `prueba_offline` (se mantiene `mock` como alias) | README 2.1–2.5: infraestructura, proveedor de pruebas, jobs y flujos | "Mock" se leía como resultados simulados; el nuevo nombre indica que solo prueba el software sin modelo |
 | 23/11–04/12/2026 | F5 | Piloto real con los 30 requerimientos del squad | Pendiente | — |
 
 ## Decisiones metodológicas (resumen)

@@ -13,7 +13,7 @@ Todo funciona con **modelos de lenguaje de pesos abiertos** (sin APIs comerciale
 ## Índice
 
 1. [Objetivos de la tesis y dónde está la evidencia](#1-objetivos-de-la-tesis-y-dónde-está-la-evidencia)
-2. [Arquitectura](#2-arquitectura): [infraestructura](#21-infraestructura-dónde-corre-cada-componente) · [pipeline](#22-arquitectura-lógica-del-pipeline) · [¿qué es mock?](#23-qué-significa-mock-y-por-qué-no-implica-datos-falsos) · [jobs](#24-jobs-de-gpu-qué-es-un-job-y-para-qué-se-ejecuta-cada-uno) · [otros flujos](#25-otros-flujos)
+2. [Arquitectura](#2-arquitectura): [infraestructura](#21-infraestructura-dónde-corre-cada-componente) · [pipeline](#22-arquitectura-lógica-del-pipeline) · [prueba_offline (antes mock)](#23-proveedor-prueba_offline-antes-mock-pruebas-del-software-sin-modelo) · [jobs](#24-jobs-de-gpu-qué-es-un-job-y-para-qué-se-ejecuta-cada-uno) · [otros flujos](#25-otros-flujos)
 3. [Estructura del repositorio](#3-estructura-del-repositorio)
 4. [Hardware utilizado](#4-hardware-utilizado)
 5. [Software y versiones](#5-software-y-versiones)
@@ -38,19 +38,19 @@ Todo funciona con **modelos de lenguaje de pesos abiertos** (sin APIs comerciale
 
 ## 2. Arquitectura
 
-La arquitectura tiene dos vistas. La **infraestructura** (2.1) muestra dónde corre cada cosa: tu PC, GitHub, Hugging Face y Colab. La **arquitectura lógica** (2.2) muestra cómo se encadenan los 16 agentes dentro del pipeline. La sección 2.3 aclara qué significa *mock* en este repositorio, la 2.4 explica qué hace cada job de GPU y la 2.5 describe los demás flujos (datos y entrenamiento, piloto con aprobaciones humanas, CI, EDA e indicadores).
+La arquitectura tiene dos vistas. La **infraestructura** (2.1) muestra dónde corre cada cosa: la PC del autor, GitHub, Hugging Face y Colab. La **arquitectura lógica** (2.2) muestra cómo se encadenan los 16 agentes dentro del pipeline. La sección 2.3 explica el proveedor `prueba_offline` (antes `mock`), que prueba el software sin modelo; la 2.4 explica qué hace cada job de GPU y la 2.5 describe los demás flujos (datos y entrenamiento, piloto con aprobaciones humanas, CI, EDA e indicadores).
 
 ### 2.1 Infraestructura: dónde corre cada componente
 
 ```mermaid
 flowchart LR
   subgraph PC["PC del autor · Windows, sin GPU"]
-    DEV["Código y git<br/>pytest con proveedor mock<br/>CLI hf jobs"]
+    DEV["Código y git<br/>pytest sin modelo · prueba_offline<br/>CLI hf jobs"]
   end
 
   subgraph GH["GitHub"]
     REPO["javierrosado/tesis<br/>código · PRs · bitácora · MANIFEST<br/>Excel de línea base"]
-    CI["GitHub Actions · CI<br/>38 pruebas con mock"]
+    CI["GitHub Actions · CI<br/>38 pruebas sin modelo"]
     SBX["javierrosado/tesis-sandbox<br/>rama req/ID por requerimiento"]
     CD["GitHub Actions · CD<br/>test + deploy a staging"]
   end
@@ -94,9 +94,9 @@ flowchart LR
 
 | Componente | Qué es | Para qué se usa en la tesis | Qué ejecuta o guarda | Evidencia |
 |---|---|---|---|---|
-| **PC del autor** | Windows x64 sin GPU, con Python 3.10 | Escribir código, correr las pruebas, lanzar los jobs de GPU y calcular los indicadores | `pytest` con proveedor mock, CLI `hf jobs`, `scripts/indicadores.py` | 38 pruebas en verde |
+| **PC del autor** | Windows x64 sin GPU, con Python 3.10 | Escribir código, correr las pruebas, lanzar los jobs de GPU y calcular los indicadores | `pytest` con el proveedor `prueba_offline` (sin modelo), CLI `hf jobs`, `scripts/indicadores.py` | 38 pruebas en verde |
 | **GitHub · `javierrosado/tesis`** | Repositorio público (este) | Código fuente, control de versiones y trazabilidad | Agentes, orquestador, jobs, notebooks, `docs/BITACORA.md`, `runs/MANIFEST.md`, Excel de línea base | PR #1 a #9, cada uno aprobado por el autor |
-| **GitHub Actions · CI** | Runner `ubuntu-latest`, sin GPU | Comprobar en cada cambio que el código del pipeline funciona | `pytest -q` y un dry-run con el proveedor mock (ver 2.3) | Pestaña *Actions* del repo |
+| **GitHub Actions · CI** | Runner `ubuntu-latest`, sin GPU | Comprobar en cada cambio que el código del pipeline funciona | `pytest -q` y un dry-run con el proveedor `prueba_offline`, sin modelo (ver 2.3) | Pestaña *Actions* del repo |
 | **Google Colab** | Notebooks en la nube, sin GPU | Que cualquier lector reproduzca el EDA sin instalar nada | `eda_linea_base.ipynb` y `eda_datasets_entrenamiento.ipynb` | Botones "Abrir en Colab" (7.3) |
 | **HF Hub** | Almacenamiento de modelos y datos de Hugging Face | Descargar los modelos base y publicar lo que produce la tesis | Pesos de `Qwen/*` (de la organización Qwen); 5 LoRA, `tesis-sft-v2` y `tesis-runs` (públicos, cuenta `jrosado1974`) | Enlaces en la sección 6 |
 | **HF Jobs** | Contenedores con GPU que se pagan por segundo y se apagan al terminar | **Toda ejecución real de modelos:** destilación, entrenamiento QLoRA, evaluación, comparación de modelos y pipeline | Dos servidores vLLM en el mismo contenedor (8B + LoRA en `:8000`, maestro 32B en `:8001`) y el pipeline, que les habla por `localhost` | 40 jobs con su id en `runs/MANIFEST.md`; hardware y versiones en `entorno.json` |
@@ -106,7 +106,7 @@ flowchart LR
 **Secuencia de punta a punta** (los números coinciden con las flechas del diagrama)
 
 1. **Desarrollo.** El autor programa en su PC, abre un pull request y lo aprueba; solo así cambia `main`.
-2. **Integración continua.** GitHub Actions corre las 38 pruebas con el proveedor mock: verifica el código, no el modelo (2.3).
+2. **Integración continua.** GitHub Actions corre las 38 pruebas con el proveedor `prueba_offline`: verifica el código, no el modelo (2.3).
 3. **Lanzamiento.** Desde la PC se lanza un job: `hf jobs uv run --flavor a100-large ... jobs/<script>.py`.
 4. **Código versionado.** El job descarga de GitHub la rama indicada; así cada resultado queda atado a una versión del código.
 5. **Modelos.** vLLM descarga de HF Hub los pesos base de Qwen y los adaptadores LoRA, y los sirve dentro del contenedor.
@@ -154,24 +154,24 @@ flowchart LR
 
 Los modelos se sirven con **vLLM** (multi-LoRA y salida restringida por JSON Schema). El modelo es un recurso inyectado por configuración: cambiar de proveedor es editar `config/providers.yaml`.
 
-### 2.3 ¿Qué significa *mock*? (y por qué no implica datos falsos)
+### 2.3 Proveedor `prueba_offline` (antes `mock`): pruebas del software sin modelo
 
-*Mock* es el nombre de uno de los proveedores de modelo de `config/providers.yaml`. **No es un tipo de dato ni una simulación del piloto:** es un sustituto del LLM que devuelve respuestas fijas guardadas en `tests/fixtures/`. Se usa con un único fin: **probar el software del pipeline** (orquestador, contratos, governance, reintentos, telemetría) de forma rápida, gratuita y repetible.
+`prueba_offline` es uno de los proveedores de modelo de `config/providers.yaml`; hasta el 20/11/2026 se llamaba `mock`, nombre que se conserva como alias. **No llama a ningún modelo de lenguaje:** devuelve artefactos de ejemplo predefinidos, guardados en `tests/fixtures/` (16 archivos, uno por agente, para el requerimiento SIM-P05-R001). Por eso sus salidas **no miden la calidad del modelo** y no se usan como resultado. Su único fin es **probar el software del pipeline** (orquestador, contratos, governance, reintentos, telemetría) de forma rápida, gratuita y repetible.
 
-| | Proveedor `mock` | Proveedor `vllm_local` (real) |
+| | Proveedor `prueba_offline` | Proveedor `vllm_local` (real) |
 |---|---|---|
-| Qué responde | Un JSON guardado en `tests/fixtures/<agente>/<req>.json` | Qwen3-8B (con su LoRA) o Qwen3-32B-AWQ, generando en GPU |
-| Dónde corre | PC del autor y GitHub Actions, sin GPU | HF Jobs (L40S o A100) |
+| Qué responde | Un artefacto JSON predefinido de `tests/fixtures/<agente>/<req>.json`; no hay modelo | Qwen3-8B (con su LoRA) o Qwen3-32B-AWQ, generando en GPU |
+| Dónde corre | PC del autor y GitHub Actions, sin GPU ni red | HF Jobs (L40S o A100) |
 | Qué demuestra | Que **el código** funciona: el DAG avanza, governance rechaza lo inválido, hay reintento y escalamiento, la telemetría se escribe | Qué tan bien **el modelo** hace la tarea: aprobación en ronda 0, métricas F5, McNemar, indicadores del piloto |
 | Costo y tiempo | USD 0 · ~2 min | Por segundo de GPU · minutos a horas |
 | ¿Sus resultados van a la tesis? | **No** | **Sí** |
-| Corridas en el MANIFEST | 2 de 44 (F0 y una verificación local de F4) | 40 de 44 en GPU; las otras 2 son pasos locales de datos (fusión y re-filtro) |
+| Corridas en el MANIFEST | 2 de 44 (F0 y una verificación local de F4; registradas como `mock`, su nombre de entonces) | 40 de 44 en GPU; las otras 2 son pasos locales de datos (fusión y re-filtro) |
 
-**Por qué existe.** El runner de GitHub Actions no tiene GPU. Además, una prueba de software debe dar siempre el mismo resultado: si se usara el LLM real, una variación de un caso del modelo haría fallar la prueba sin que el código tenga ningún error. Con mock, si una prueba falla, el error está en el código. Es la práctica habitual de pruebas unitarias con dobles de prueba.
+**Por qué existe.** El runner de GitHub Actions no tiene GPU. Además, una prueba de software debe dar siempre el mismo resultado: si se usara el LLM real, una variación de un caso del modelo haría fallar la prueba sin que el código tenga ningún error. Con respuestas predefinidas, si una prueba falla, el error está en el código. Es la práctica habitual de pruebas unitarias con dobles de prueba (*test doubles*), que en la jerga de software suelen llamarse *mocks*; se cambió el nombre porque fuera de ese contexto "mock" se entiende como "resultados simulados".
 
-**Cómo comprobar qué proveedor produjo cada dato.** Cada evento de telemetría registra `provider` y `model_id` (`core/telemetry.py`, `core/model_port.py`). En los 24 archivos de telemetría publicados en `tesis-runs` (revisados el 20/11/2026) aparecen `openai_compat` (vLLM, con `model_id` igual al nombre del adaptador, `Qwen/Qwen3-8B` o `Qwen/Qwen3-32B-AWQ`), `deterministic` (governance) y `hf_local` (F1). **Ningún evento tiene `provider = mock`.**
+**Cómo comprobar qué proveedor produjo cada dato.** Cada evento de telemetría registra `provider` y `model_id` (`core/telemetry.py`, `core/model_port.py`). Con este proveedor, `model_id` es `artefacto-de-prueba`. En los 24 archivos de telemetría publicados en `tesis-runs` (revisados el 20/11/2026) aparecen `openai_compat` (vLLM, con `model_id` igual al nombre del adaptador, `Qwen/Qwen3-8B` o `Qwen/Qwen3-32B-AWQ`), `deterministic` (governance) y `hf_local` (F1). **Ningún evento proviene del proveedor de prueba** (ni `mock` ni `prueba_offline`).
 
-**Un caso a tener en cuenta.** La tubería de despliegue a `tesis-sandbox` (run 44764311596) se validó con artefactos del mock para probarla sin gastar GPU. En las pruebas de humo con el modelo real ningún release salió *go*, porque las pruebas del código generado no pasaron. El despliegue de código generado por el LLM se demostrará en el piloto F5, cuando un requerimiento obtenga release *go*.
+**Un caso a tener en cuenta.** La tubería de despliegue a `tesis-sandbox` (run 44764311596) se validó con los artefactos predefinidos de este proveedor, para probarla sin gastar GPU. En las pruebas de humo con el modelo real ningún release salió *go*, porque las pruebas del código generado no pasaron. El despliegue de código generado por el LLM se demostrará en el piloto F5, cuando un requerimiento obtenga release *go*.
 
 ### 2.4 Jobs de GPU: qué es un job y para qué se ejecuta cada uno
 
@@ -268,7 +268,7 @@ sequenceDiagram
   PC->>PC: indicadores.py → tablas de la tesis
 ```
 
-**Flujo de integración continua.** En cada push o pull request, GitHub Actions instala `requirements.txt`, corre `pytest -q` (38 pruebas) y un dry-run del vertical Discovery con el proveedor mock. Sirve para detectar errores de código antes del merge. No usa GPU ni modelos (2.3).
+**Flujo de integración continua.** En cada push o pull request, GitHub Actions instala `requirements.txt`, corre `pytest -q` (38 pruebas) y un dry-run del vertical Discovery con el proveedor `prueba_offline`. Sirve para detectar errores de código antes del merge. No usa GPU ni modelos (2.3).
 
 **Flujo de reproducción del EDA.** El lector abre un notebook en Colab. El notebook descarga el Excel desde GitHub o el dataset desde HF Hub, y recalcula las cifras publicadas sin GPU (7.3).
 
@@ -283,7 +283,7 @@ tesis/
 ├── config/
 │   ├── dag.yaml                Orden de ejecución de los 16 agentes (con etapas en paralelo)
 │   ├── gates.yaml              Matriz RACI y nivel de riesgo por artefacto (modo manual/auto)
-│   └── providers.yaml          Qué modelo atiende a cada agente (mock, vLLM, adaptadores, maestro)
+│   └── providers.yaml          Qué modelo atiende a cada agente (prueba_offline, vLLM, adaptadores, maestro)
 ├── contracts/                  Esquemas comunes (solicitud de negocio, procedencia)
 ├── core/
 │   ├── orchestrator.py         Orquestador: DAG, reintentos, gates reanudables, bucle de calidad
@@ -293,7 +293,7 @@ tesis/
 │   ├── deploy.py               Empaquetado y despliegue a staging (GitHub API + Actions)
 │   ├── tools/sandbox.py        DDL en SQLite, servicio FastAPI generado, pytest, ruff, bandit
 │   ├── tools/rag.py            knowledge-rag (BM25)
-│   ├── adapters/               Proveedores de modelo (mock, OpenAI-compatible/vLLM, HF local, Ollama)
+│   ├── adapters/               Proveedores de modelo (prueba_offline, OpenAI-compatible/vLLM, HF local, Ollama)
 │   ├── envinfo.py              Registro de hardware y versiones en cada job
 │   └── telemetry.py            Eventos JSONL de cada ejecución (insumo de los indicadores)
 ├── data/
@@ -397,7 +397,7 @@ git clone https://github.com/javierrosado/tesis.git && cd tesis
 python -m venv .venv && source .venv/bin/activate      # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 pytest -q                                               # resultado esperado: 38 passed
-PIPELINE_PROVIDER=mock python scripts/run_pipeline.py --req SIM-P05-R001   # prueba del software con respuestas grabadas (ver 2.3); no usa el modelo
+PIPELINE_PROVIDER=prueba_offline python scripts/run_pipeline.py --req SIM-P05-R001   # prueba del software con artefactos predefinidos (ver 2.3); no usa ningún modelo
 ```
 
 ### 7.3 EDA (sin GPU, en Colab o local)

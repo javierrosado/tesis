@@ -50,7 +50,7 @@ def test_release_no_go_inconsistente_rechazado():
 
 
 def test_flujo_manual_reanudable(tmp_path, monkeypatch):
-    monkeypatch.setenv("PIPELINE_PROVIDER", "mock")
+    monkeypatch.setenv("PIPELINE_PROVIDER", "mock")  # alias histórico de prueba_offline: verifica la compatibilidad
     out = ROOT / "data/requerimientos/SIM-P05-R001/output"; shutil.rmtree(out, ignore_errors=True)
     aprobados = []
     for _ in range(10):

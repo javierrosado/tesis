@@ -13,7 +13,7 @@ Todo funciona con **modelos de lenguaje de pesos abiertos** (sin APIs comerciale
 ## Índice
 
 1. [Objetivos de la tesis y dónde está la evidencia](#1-objetivos-de-la-tesis-y-dónde-está-la-evidencia)
-2. [Arquitectura](#2-arquitectura): [infraestructura](#21-infraestructura-dónde-corre-cada-componente) · [pipeline](#22-arquitectura-lógica-del-pipeline) · [prueba_offline (antes mock)](#23-proveedor-prueba_offline-antes-mock-pruebas-del-software-sin-modelo) · [jobs](#24-jobs-de-gpu-qué-es-un-job-y-para-qué-se-ejecuta-cada-uno) · [otros flujos](#25-otros-flujos)
+2. [Arquitectura](#2-arquitectura): [infraestructura](#21-infraestructura-dónde-corre-cada-componente) · [pipeline](#22-arquitectura-lógica-del-pipeline) · [prueba_offline (antes mock)](#23-proveedor-prueba_offline-antes-mock-pruebas-del-software-sin-modelo) · [jobs](#24-jobs-de-gpu-qué-es-un-job-y-para-qué-se-ejecuta-cada-uno) · [otros flujos](#25-otros-flujos) · [ejemplo de punta a punta](#26-ejemplo-de-ejecución-de-punta-a-punta-sim-p05-r001)
 3. [Estructura del repositorio](#3-estructura-del-repositorio)
 4. [Hardware utilizado](#4-hardware-utilizado)
 5. [Software y versiones](#5-software-y-versiones)
@@ -38,7 +38,7 @@ Todo funciona con **modelos de lenguaje de pesos abiertos** (sin APIs comerciale
 
 ## 2. Arquitectura
 
-La arquitectura tiene dos vistas. La **infraestructura** (2.1) muestra dónde corre cada cosa: la PC del autor, GitHub, Hugging Face y Colab. La **arquitectura lógica** (2.2) muestra cómo se encadenan los 16 agentes dentro del pipeline. La sección 2.3 explica el proveedor `prueba_offline` (antes `mock`), que prueba el software sin modelo; la 2.4 explica qué hace cada job de GPU y la 2.5 describe los demás flujos (datos y entrenamiento, piloto con aprobaciones humanas, CI, EDA e indicadores).
+La arquitectura tiene dos vistas. La **infraestructura** (2.1) muestra dónde corre cada cosa: la PC del autor, GitHub, Hugging Face y Colab. La **arquitectura lógica** (2.2) muestra cómo se encadenan los 16 agentes dentro del pipeline. La sección 2.3 explica el proveedor `prueba_offline` (antes `mock`), que prueba el software sin modelo; la 2.4 explica qué hace cada job de GPU, la 2.5 describe los demás flujos (datos y entrenamiento, piloto con aprobaciones humanas, CI, EDA e indicadores) y la 2.6 sigue un requerimiento real de punta a punta.
 
 ### 2.1 Infraestructura: dónde corre cada componente
 
@@ -273,6 +273,76 @@ sequenceDiagram
 **Flujo de reproducción del EDA.** El lector abre un notebook en Colab. El notebook descarga el Excel desde GitHub o el dataset desde HF Hub, y recalcula las cifras publicadas sin GPU (7.3).
 
 **Flujo de indicadores.** `scripts/indicadores.py` lee los JSONL de telemetría (cada evento trae `agent`, `provider`, `model_id`, tokens y latencia) y agrupa por clase de modelo: `lora`, `base`, `maestro` y `determinista`. Produce las tablas de la tesis en Markdown o CSV.
+
+### 2.6 Ejemplo de ejecución de punta a punta: SIM-P05-R001
+
+Este ejemplo sigue un requerimiento real del piloto a través de los 16 agentes, con los modelos reales en GPU. Los datos salen de la telemetría publicada de la prueba de humo `humo16d` (job `6b0062d9efaf5e14f4b36f4e`, A100, 20/11/2026). Los artefactos generados se pueden abrir en [`tesis-runs/piloto/humo16d/estado/SIM-P05-R001/output`](https://huggingface.co/datasets/jrosado1974/tesis-runs/tree/main/piloto/humo16d/estado/SIM-P05-R001/output).
+
+**1. Entrada.** Resumen del brief del requerimiento ([`data/requerimientos/SIM-P05-R001/input/brief.md`](data/requerimientos/SIM-P05-R001/input/brief.md)):
+
+> **Consulta de estado del pedido en tiempo real.** Las consultoras llaman al centro de atención para saber dónde está su pedido; el portal muestra solo "en proceso" hasta la facturación. Se pide ver la etapa del pedido (registrado, aprobado, en preparación, despachado, entregado) y la fecha estimada de entrega. Reglas: BR-010 (estados del pedido) y BR-011 (fecha estimada por zona). 5 puntos, Ecuador, app móvil y web.
+
+**2. Ejecución.** Dos formas de correrlo:
+
+```bash
+# a) Prueba del software, sin modelo (cualquier lector, ~2 min, sin GPU): recorre el DAG con artefactos predefinidos
+PIPELINE_PROVIDER=prueba_offline python scripts/run_pipeline.py --req SIM-P05-R001
+
+# b) Ejecución real con los modelos en GPU (la de este ejemplo; $AD = lista de adaptadores, ver 7.4)
+hf jobs uv run --flavor a100-large --timeout 1h --secrets HF_TOKEN \
+  -e BRANCH=main -e PILOT=ejemplo -e REQS=SIM-P05-R001 -e RUNS_REPO=$U/tesis-runs \
+  -e "ADAPTERS=$AD" -e GATES_MODE=auto -e TEACHER_MODE=always jobs/run_pipeline_job.py
+```
+
+**3. Recorrido por los agentes** (cifras tomadas de la telemetría; "rechazos" son devoluciones de governance con su hallazgo)
+
+| # | Dominio | Agente | Modelo que respondió | Llamadas | Rechazos de governance | Tokens generados | Tiempo del modelo | Artefacto producido |
+|---|---|---|---|---|---|---|---|---|
+| 1 | Discovery | product-analyst | Qwen3-8B + LoRA | 1 | 0 | 974 | 18,9 s | 5 historias de usuario con criterios Given/When/Then |
+| 2 | Discovery | ux-ui-copilot | Qwen3-8B base | 1 | 0 | 429 | 6,6 s | Especificación UX |
+| 3 | Discovery | domain-modeling | Qwen3-8B base | 1 | 0 | 639 | 9,3 s | Modelo de dominio |
+| 4 | Arquitectura | solution-architect | Qwen3-8B + LoRA | 1 | 0 | 1 087 | 20,0 s | Arquitectura de solución |
+| 5 | Arquitectura | security-compliance | Qwen3-8B base | 1 | 0 | 1 180 | 19,9 s | Paquete de seguridad |
+| 6 | Ingeniería | api-designer | Qwen3-8B + LoRA | 1 | 0 | 847 | 16,8 s | OpenAPI 3.1 (`GET /v1/pedidos/{pedidoId}/estado`) |
+| 7 | Ingeniería | data-model | Qwen3-8B base | 3 | 2 | 3 417 | 59,9 s | DDL SQL (`up` y `down`) |
+| 8 | Ingeniería | backend-developer | Qwen3-32B-AWQ | 3 | 0 | 3 620 | 114,3 s | Servicio FastAPI (`servicio/app/main.py`) |
+| 9 | Calidad | test-case-generator | Qwen3-8B + LoRA | 1 | 0 | 2 167 | 62,9 s | Casos de prueba trazados a los criterios |
+| 10 | Calidad | qa-automation | Qwen3-32B-AWQ | 2 | 1 | 2 320 | 89,0 s | Suite pytest ejecutable |
+| 11 | Calidad | code-review | Qwen3-32B-AWQ | 3 | 0 | 1 981 | 47,3 s | Revisión de código (ruff, bandit y hallazgos) |
+| 12 | DevOps | cicd-pipeline | Qwen3-8B + LoRA | 2 | 1 | 3 100 | 54,8 s | 6 workflows de GitHub Actions (dev, staging, prod) |
+| 13 | DevOps | release-manager | Qwen3-8B base | 1 | 0 | 521 | 7,3 s | Plan de release con decisión go/no-go |
+| — | Transversal | governance | Sin modelo (reglas) | 34 veredictos | — | — | — | Un archivo `*.decision.json` por artefacto |
+
+Tiempo total de la corrida: **488 s (≈ 8 min)**.
+
+**4. Qué hicieron governance y el ciclo de calidad.** Así se ve el control en acción:
+
+- **data-model**, rondas 0 y 1: rechazado porque *"El DDL generado no se ejecuta en SQLite: FK pedido_id → pedido.pedido_id no existe"*. Con ese feedback lo corrigió y fue aprobado en la ronda 2.
+- **qa-automation**, ronda 0: rechazado porque *"Casos sin suite: TC-UNIT-001 … TC-UNIT-005"*. Aprobado en la ronda 1.
+- **cicd-pipeline**, ronda 0: rechazado porque el job que ejecuta pytest no hacía checkout del código. Aprobado en la ronda 1.
+- **Ciclo de calidad:** las pruebas de QA se ejecutaron contra el servicio. Ciclo 0: 8 pruebas fallidas → el backend se regeneró (remediación 1). Ciclo 1: 9 fallas y 1 hallazgo crítico de code-review → nueva remediación. Ciclo 2: quedaron 5 pruebas fallidas.
+- Todos los rechazos quedan auditables en `rechazos.jsonl`, y cada veredicto en `<artefacto>.decision.json`.
+
+**5. Resultado: release *no-go*, sin despliegue.** El plan de release (`release_plan.json`) evaluó su checklist y decidió no desplegar:
+
+| Criterio del release | Cumple | Evidencia |
+|---|---|---|
+| Pruebas automatizadas en verde | No | 5 de 10 pruebas fallidas |
+| 0 hallazgos críticos de revisión | Sí | Críticos: 0 |
+| Puertas de seguridad superadas | No | FIND-002, severidad mayor |
+| Pipeline de producción con puerta manual | Sí | PIPE-103 con GATE-303 manual |
+
+Telemetría: `deploy_skipped: no-go`. **El pipeline funcionó como debía:** no desplegó código que no pasaba sus pruebas.
+
+**6. Qué se corrigió después de esta corrida:**
+
+- Las 5 pruebas fallaban porque la suite de QA importaba un módulo inexistente (`app.dominio`), y eso contaba como defecto del servicio. Ahora una suite que no se puede importar se invalida y QA debe corregirla (corrección 11 de la prueba de humo F4).
+- El hallazgo de seguridad de severidad mayor bloqueaba el release. Se alineó con la política escrita: solo bloquea un hallazgo crítico; mayor y menor van al backlog con su remediación (corrección 12).
+
+**Dos aclaraciones para interpretar el ejemplo**
+
+- Es una **prueba de humo** en modo `GATES_MODE=auto`: los gates de aprobación se resolvieron automáticamente, sin personas. En el piloto F5 (`manual`) esos mismos gates esperan la decisión del autor (flujo de la sección 2.5).
+- Los artefactos de este ejemplo los generaron los modelos reales: el `provider` es `openai_compat` y el `model_id` es el adaptador o el modelo de la tabla. No intervino el proveedor `prueba_offline`.
 
 ## 3. Estructura del repositorio
 

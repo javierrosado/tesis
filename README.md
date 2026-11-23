@@ -542,7 +542,7 @@ Verificación de que el piloto no está en el entrenamiento (`python scripts/ver
 | Para | Necesitas |
 |---|---|
 | Pruebas locales y EDA | Python 3.10+ y git. Sin GPU ni cuentas |
-| Experimentos en GPU | Cuenta de Hugging Face con saldo para [Jobs](https://huggingface.co/docs/huggingface_hub/guides/jobs) (o plan PRO), token con permiso de escritura y la CLI `hf` |
+| Experimentos en GPU | Cuenta de Hugging Face con saldo para [Jobs](https://huggingface.co/docs/huggingface_hub/guides/jobs) (o plan PRO), token con permiso de escritura y la CLI `hf`. Como el repositorio es privado, cada job necesita además `--secrets GITHUB_TOKEN` (token con lectura de `javierrosado/tesis`) para descargar el código |
 | Llama-3.1-8B en la comparación | Aceptar su licencia en su página de Hugging Face |
 | Despliegue a staging | Un repositorio de GitHub propio y un token con permisos Contents, Actions y Workflows |
 

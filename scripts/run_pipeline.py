@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Ejecuta el vertical Discovery para uno o varios requerimientos.
 
-  PIPELINE_PROVIDER=mock      python scripts/run_pipeline.py --req SIM-P05-R001
+  PIPELINE_PROVIDER=prueba_offline python scripts/run_pipeline.py --req SIM-P05-R001   # sin modelo (prueba del software)
   PIPELINE_PROVIDER=hf_local  python scripts/run_pipeline.py --all
   PIPELINE_PROVIDER=anthropic python scripts/run_pipeline.py --req SIM-P05-R001   # solo pruebas internas
 """

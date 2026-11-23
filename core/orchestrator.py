@@ -87,11 +87,15 @@ class Orchestrator:
         d = self.root / "data/requerimientos" / req_id / "output"; d.mkdir(parents=True, exist_ok=True)
         return d
 
-    def _messages(self, agent, payload: dict, knowledge: str, feedback: list[dict] | None = None) -> list[dict]:
+    def _messages(self, agent, payload: dict, knowledge: str, feedback: list[dict] | None = None, anterior: dict | None = None) -> list[dict]:
         user = (f"## Entrada ({agent.spec.get('input_schema') or 'contexto'})\n```json\n{json.dumps(payload, ensure_ascii=False, indent=1)}\n```\n\n"
                 f"## Conocimiento recuperado (cita los ids en provenance.knowledge_refs)\n{knowledge or '(sin resultados)'}\n\n"
                 f"## Esquema de salida (JSON Schema)\n```json\n{json.dumps(agent.output_schema, ensure_ascii=False)}\n```")
         msgs = [{"role": "system", "content": agent.prompt}, {"role": "user", "content": user}]
+        if anterior is not None:          # ensayo1 (23/11/2026): sin la versión devuelta, el agente rehacía el artefacto y perdía correcciones previas
+            msgs.append({"role": "user", "content": "Esta es la versión que el revisor humano te devolvió. Parte de ella: conserva todo lo que no se pide "
+                                                    "cambiar y aplica TODAS las devoluciones de la lista siguiente (las anteriores siguen vigentes):\n```json\n"
+                                                    + json.dumps({k: v for k, v in anterior.items() if k != "provenance"}, ensure_ascii=False, indent=1) + "\n```"})
         if feedback:
             reglas = "\n".join(f"- {v['id']}: {v['rule']}" + (f" ({v['description']})" if v.get("description") else "") for v in agent.verification if v["id"] != "refinement_rounds")
             msgs.append({"role": "user", "content": "Hallazgos de gobernanza sobre tu versión anterior; corrígelos todos:\n"
@@ -165,6 +169,15 @@ class Orchestrator:
                 "motivo": a.get("motivo", ""), "ts": a["ts"], "delay_h": round((t1 - t0).total_seconds() / 3600, 2),
                 "ventana": a.get("ventana"), "dictamen_ia": (a.get("dictamen_ia") or {}).get("recomendacion"), "coincide_con_ia": a.get("coincide_con_ia")}
 
+    def _registrar_devolucion(self, req_id: str, art: str, h: dict) -> list[dict]:
+        """Acumula las devoluciones humanas de un artefacto (output/devoluciones/<art>.jsonl) y devuelve el historial completo."""
+        d = self._out_dir(req_id) / "devoluciones"; d.mkdir(exist_ok=True); f = d / f"{art}.jsonl"
+        previos = [json.loads(x) for x in f.read_text(encoding="utf-8").splitlines() if x.strip()] if f.exists() else []
+        if not any(p["ts"] == h["ts"] for p in previos):
+            previos.append({"ts": h["ts"], "motivo": h.get("motivo", ""), "por": h.get("by"), "rol": h.get("role")})
+            f.write_text("".join(json.dumps(p, ensure_ascii=False) + "\n" for p in previos), encoding="utf-8")
+        return previos
+
     # ---------- nodo = agente + governance + gate ----------
     def _load(self, req_id: str, name: str):
         d = self._out_dir(req_id)
@@ -174,6 +187,7 @@ class Orchestrator:
 
     def run_agent(self, agent_name: str, payload: dict, ctx: dict, feedback0: list | None = None, force: bool = False, defer_gate: bool = False) -> dict:
         agent = self.reg.agents[agent_name]; name = ARTEFACT_NAME[agent_name]; req_id = ctx["req_id"]
+        anterior = None
         saved = None if force else self._load(req_id, name)
         if saved:
             out, meta = saved
@@ -190,13 +204,16 @@ class Orchestrator:
                 if h["decision"] == "approved":
                     meta["gate"] = h; self._save(ctx, name, out, meta)
                     return out
-                feedback0 = [{"severidad": "mayor", "regla": "gate_humano", "detalle": f"devuelto por {h['role']}: {h['motivo']}", "ubicacion": "<raíz>"}]
+                previos = self._registrar_devolucion(req_id, name, h)
+                feedback0 = [{"severidad": "mayor", "regla": "gate_humano", "detalle": f"devuelto por {h['role']} ({p['ts']}): {p['motivo']}",
+                              "ubicacion": "<raíz>"} for p in previos]
+                anterior = out
         max_rounds = agent.spec.get("max_governance_rounds", self.reg.dag.get("retry", {}).get("max_governance_rounds", 2))
         knowledge, _ = self.rag.context_block(self._queries_for(agent, ctx))
         self.tel.emit(event="handoff", req_id=req_id, to=agent_name, frm=agent.spec.get("consumes_from"), mode="auto")
         feedback = feedback0
         for round_ in range(max_rounds + 1):
-            out, stats = self._port(agent).run(agent, req_id, self._messages(agent, payload, knowledge, feedback), variant=f"r{round_}")
+            out, stats = self._port(agent).run(agent, req_id, self._messages(agent, payload, knowledge, feedback, anterior), variant=f"r{round_}")
             self._stamp_provenance(agent, out, req_id)
             verdict, ok_f5, f5 = self._review(agent, out, ctx, round_)
             if verdict["veredicto"] == "rechazado":
@@ -219,7 +236,8 @@ class Orchestrator:
                     feedback = [{"severidad": "mayor", "regla": "gate_humano", "detalle": f"devuelto por {gate['role']}", "ubicacion": "<raíz>"}]
                     continue
                 return out
-            feedback = verdict["hallazgos"]
+            feedback = (feedback0 or []) + verdict["hallazgos"]   # las devoluciones humanas siguen vigentes en las rondas de governance
+            anterior = None
         self.tel.emit(event="escalation", req_id=req_id, agent=agent_name, round=max_rounds, to=agent.gate["role"] if agent.gate else "tech_lead", reason="max_rounds")
         if self.reg.gates.get("mode") == "manual" and agent.gate:
             # Escalamiento (F3 de cada ficha): el humano decide sobre la última versión con los hallazgos a la vista

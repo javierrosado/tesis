@@ -96,3 +96,27 @@ def test_modelo_diferido_pausa_sin_sustituir(tmp_path, monkeypatch):
     except ModelDeferred:
         pass
     o._port(o.reg.agents["product-analyst-agent"])   # los demás agentes no se afectan
+
+
+def test_devoluciones_humanas_se_acumulan(tmp_path, monkeypatch):
+    """ensayo1: al devolver por segunda vez, el agente recibe la versión devuelta y TODAS las devoluciones previas."""
+    monkeypatch.setenv("PIPELINE_PROVIDER", "prueba_offline"); monkeypatch.setenv("GATES_MODE", "manual")
+    out = ROOT / "data/requerimientos/SIM-P05-R001/output"; shutil.rmtree(out, ignore_errors=True)
+    capturas = []
+    for i, motivo in enumerate(["agregar casos negativos", "quitar la fecha estimada antes del despacho", None]):
+        orch = Orchestrator(ROOT, Telemetry(tmp_path / "ev.jsonl"), seed=1, today="2026-11-24")
+        orig = orch._messages
+        orch._messages = lambda *a, **k: capturas.append((a, k)) or orig(*a, **k)
+        orch.run("SIM-P05-R001")
+        if motivo is None:
+            break
+        pend = json.loads((out / "pendientes" / "user_story_set.json").read_text(encoding="utf-8"))
+        (out / "aprobaciones").mkdir(exist_ok=True)
+        (out / "aprobaciones" / "user_story_set.json").write_text(json.dumps({"decision": "returned", "motivo": motivo, "por": "prueba",
+                                                                               "ts": f"2026-11-24T1{i}:00:00+00:00", "hash": pend["hash"]}), encoding="utf-8")
+    hist = (out / "devoluciones" / "user_story_set.jsonl").read_text(encoding="utf-8").splitlines()
+    assert len(hist) == 2
+    con_fb = [c for c in capturas if len(c[0]) >= 4 and c[0][3]]
+    textos = [json.dumps([m["content"] for m in orig(*c[0], **c[1])], ensure_ascii=False) for c in con_fb]
+    assert "agregar casos negativos" in textos[-1] and "quitar la fecha estimada" in textos[-1]       # vigentes también en rondas de governance
+    assert any("versión que el revisor humano te devolvió" in x and "quitar la fecha estimada" in x for x in textos)

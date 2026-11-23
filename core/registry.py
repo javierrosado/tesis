@@ -72,6 +72,20 @@ class Registry:
             name = f"{name}+lora"
         return name, cfg
 
+    def correccion_provider(self, agent_name: str) -> tuple[str, dict] | None:
+        """D-E1: proveedor que atiende la corrección tras una devolución humana (None = el mismo del agente)."""
+        c = self.providers_cfg.get("correccion_humana") or {}
+        base = os.environ.get("PIPELINE_PROVIDER") or self.providers_cfg["default"]
+        if c.get("switch_to") and base == c.get("for_provider"):
+            return c["switch_to"], dict(self.providers_cfg["providers"][c["switch_to"]])
+        return None
+
+    def adapter_by_name(self, name: str, cfg: dict):
+        from core.adapters import build_adapter
+        if name not in self._adapters:
+            self._adapters[name] = build_adapter(name, cfg, self.root)
+        return self._adapters[name]
+
     def adapter_for(self, agent_name: str):
         from core.adapters import build_adapter
         name, cfg = self.provider_for(agent_name)

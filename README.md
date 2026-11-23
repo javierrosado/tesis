@@ -237,6 +237,8 @@ flowchart LR
 | Funcionales restantes | domain-modeling, ux-ui-copilot, security-compliance, data-model, release-manager | `Qwen/Qwen3-8B` base |
 | Transversales | governance, skill-orchestrator, knowledge-rag | Sin modelo de lenguaje (reglas, orquestador, BM25) |
 
+**D-E1 (23/11/2026):** cuando el autor devuelve un artefacto en un gate, la corrección la genera el maestro `Qwen/Qwen3-32B-AWQ`; la primera versión sigue siendo del agente de la tabla. La telemetría registra cada corrección (`correccion_humana`).
+
 Los modelos se sirven con **vLLM** (multi-LoRA y salida restringida por JSON Schema). El modelo es un recurso inyectado por configuración: cambiar de proveedor es editar `config/providers.yaml`.
 
 ### 2.3 Proveedor `prueba_offline` (antes `mock`): pruebas del software sin modelo

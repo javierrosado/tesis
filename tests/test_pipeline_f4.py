@@ -120,3 +120,18 @@ def test_devoluciones_humanas_se_acumulan(tmp_path, monkeypatch):
     textos = [json.dumps([m["content"] for m in orig(*c[0], **c[1])], ensure_ascii=False) for c in con_fb]
     assert "agregar casos negativos" in textos[-1] and "quitar la fecha estimada" in textos[-1]       # vigentes también en rondas de governance
     assert any("versión que el revisor humano te devolvió" in x and "quitar la fecha estimada" in x for x in textos)
+
+
+def test_correccion_humana_la_hace_el_maestro(monkeypatch):
+    """D-E1: con vLLM, la corrección tras una devolución humana usa el maestro; sin él disponible, se difiere (no se sustituye)."""
+    from core.orchestrator import ModelDeferred
+    monkeypatch.setenv("PIPELINE_PROVIDER", "vllm_local")
+    assert REG.correccion_provider("product-analyst-agent")[0] == "vllm_teacher"
+    monkeypatch.setenv("PROVIDERS_DOWN", "vllm_teacher")
+    orch = Orchestrator(ROOT, Telemetry(ROOT / "telemetry" / "tmp_correccion.jsonl"), seed=1, today="2026-11-24")
+    import pytest
+    with pytest.raises(ModelDeferred):
+        orch._port(REG.agents["product-analyst-agent"], correccion=True)
+    orch._port(REG.agents["product-analyst-agent"], correccion=False)      # la primera versión sigue con su LoRA
+    monkeypatch.setenv("PIPELINE_PROVIDER", "prueba_offline")
+    assert REG.correccion_provider("product-analyst-agent") is None

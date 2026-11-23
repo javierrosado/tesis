@@ -41,7 +41,18 @@ except Exception as e:  # noqa: BLE001
 mods = [f"{a}={snapshot_download(repo)}" for a, repo in (x.split("=") for x in os.environ.get("ADAPTERS", "").split())]
 TEACHER = os.environ.get("TEACHER_MODEL", "Qwen/Qwen3-32B-AWQ")   # D-F4-1 C; TEACHER_MODEL=none lo desactiva
 MODE_T = os.environ.get("TEACHER_MODE", "auto")                    # auto: solo si algún requerimiento ya llegó al diseño de API
-USE_T = TEACHER.lower() != "none" and (MODE_T == "always" or any((ROOT / "data/requerimientos" / r / "output" / "api_design.json").exists() for r in reqs))
+def _devolucion_pendiente(r: str) -> bool:
+    """D-E1: hay una devolución humana de la versión pendiente, así que la corrección la hará el maestro."""
+    out = ROOT / "data/requerimientos" / r / "output"
+    for a in (out / "aprobaciones").glob("*.json") if (out / "aprobaciones").exists() else []:
+        d = json.loads(a.read_text(encoding="utf-8")); p = out / "pendientes" / a.name
+        if d.get("decision") == "returned" and p.exists() and json.loads(p.read_text(encoding="utf-8")).get("hash") == d.get("hash"):
+            return True
+    return False
+
+
+USE_T = TEACHER.lower() != "none" and (MODE_T == "always" or any((ROOT / "data/requerimientos" / r / "output" / "api_design.json").exists()
+                                                                 or _devolucion_pendiente(r) for r in reqs))
 if not USE_T:   # los agentes del maestro se difieren a la próxima ventana; nunca se sustituye el modelo
     os.environ["PROVIDERS_DOWN"] = "vllm_teacher"
 print("maestro:", "sí" if USE_T else "no (diferido)", flush=True)

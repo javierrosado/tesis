@@ -77,11 +77,12 @@ class Orchestrator:
         self.rejections: list[dict] = []         # diagnóstico: salidas rechazadas por governance con sus hallazgos
 
     # ---------- utilidades ----------
-    def _port(self, agent):
-        name, _ = self.reg.provider_for(agent.name)
+    def _port(self, agent, correccion: bool = False):
+        alt = self.reg.correccion_provider(agent.name) if correccion else None     # D-E1: la corrección tras devolución humana la hace el maestro
+        name, cfg = alt if alt else self.reg.provider_for(agent.name)
         if name in [x for x in os.environ.get("PROVIDERS_DOWN", "").split(",") if x]:
             raise ModelDeferred(f"{agent.name}: {name}")
-        return ModelPort(self.reg.adapter_for(agent.name), self.tel, max_retries=2)
+        return ModelPort(self.reg.adapter_by_name(name, cfg) if alt else self.reg.adapter_for(agent.name), self.tel, max_retries=2)
 
     def _out_dir(self, req_id: str) -> Path:
         d = self.root / "data/requerimientos" / req_id / "output"; d.mkdir(parents=True, exist_ok=True)
@@ -212,8 +213,11 @@ class Orchestrator:
         knowledge, _ = self.rag.context_block(self._queries_for(agent, ctx))
         self.tel.emit(event="handoff", req_id=req_id, to=agent_name, frm=agent.spec.get("consumes_from"), mode="auto")
         feedback = feedback0
+        correccion = anterior is not None
+        if correccion:
+            self.tel.emit(event="correccion_humana", req_id=req_id, agent=agent_name, artefact=name, devoluciones=len(feedback0 or []))
         for round_ in range(max_rounds + 1):
-            out, stats = self._port(agent).run(agent, req_id, self._messages(agent, payload, knowledge, feedback, anterior), variant=f"r{round_}")
+            out, stats = self._port(agent, correccion).run(agent, req_id, self._messages(agent, payload, knowledge, feedback, anterior), variant=f"r{round_}")
             self._stamp_provenance(agent, out, req_id)
             verdict, ok_f5, f5 = self._review(agent, out, ctx, round_)
             if verdict["veredicto"] == "rechazado":

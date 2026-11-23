@@ -1,0 +1,15 @@
+# Calendario de los pilotos (protocolo F5 v2, 20/11/2026). El orquestador lo usa cuando la variable PILOT
+# nombra un piloto de esta lista; si no, aplica la regla general de la política de release (martes o jueves).
+# Fijado antes del arranque: no se modifica durante el piloto (criterio C7 del protocolo).
+piloto1:
+  zona_horaria: America/Lima
+  inicio: 2026-11-30
+  fin: 2026-12-11                      # cierre de la observación; los casos sin go_release quedan censurados en esta fecha
+  ventanas_aprobacion: ["09:00", "17:00"]
+  dias_release: [2026-12-01, 2026-12-03, 2026-12-09, 2026-12-10]
+  feriados: [2026-12-08]               # Inmaculada Concepción
+  releases_movidos: {2026-12-08: 2026-12-09}   # decisión del autor (23/11/2026): el release del martes feriado pasa al miércoles
+  despliegue: por_requerimiento        # un despliegue a staging por requerimiento (pueden coincidir el mismo día)
+  observacion:
+    fallo_despliegue_dias_habiles: 3   # H2: rollback o corrección dentro de este plazo cuenta como despliegue fallido
+    defecto_escapado_dias_habiles: 5   # H3: o hasta la fecha de fin, lo que ocurra primero

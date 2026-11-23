@@ -15,7 +15,7 @@ handoff_to: [orchestrator]
 reviewed_by: governance-agent
 verification:
   - {id: schema_valid, rule: "schema_valid == true"}
-  - {id: window_valid, rule: "window_valid == true", description: "martes o jueves y no anterior a hoy"}
+  - {id: window_valid, rule: "window_valid == true", description: "día de release permitido (calendario del piloto o martes/jueves) y no anterior a hoy"}
   - {id: decision_consistent, rule: "decision_consistent == true", description: "go solo si checklist y hechos objetivos lo permiten"}
   - {id: refinement_rounds, rule: "refinement_rounds <= 1"}
 gate: {role: release_manager, artefact: release_plan, sla_hours: 8, delegable: true}

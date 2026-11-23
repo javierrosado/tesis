@@ -272,14 +272,9 @@ def metrics_code_review(out: dict, ctx: dict) -> dict:
 
 
 def metrics_release(out: dict, ctx: dict) -> dict:
-    from datetime import date
+    from . import calendario
     r = out.get("release", {})
-    hoy = date.fromisoformat(ctx.get("hoy") or date.today().isoformat())
-    try:
-        v = date.fromisoformat(r.get("ventana", ""))
-        window_ok = v.weekday() in (1, 3) and v >= hoy
-    except ValueError:
-        window_ok = False
+    window_ok = calendario.ventana_valida(r.get("ventana", ""), ctx.get("hoy") or calendario.hoy_lima(), ctx.get("calendario"))
     q = quality_facts(ctx)
     facts_ok = q["pruebas_fallidas"] == 0 and q["criticos"] == 0 and q["pruebas_total"] > 0
     go = r.get("decision") == "go"

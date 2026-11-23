@@ -70,7 +70,9 @@ class Orchestrator:
         import os
         if os.environ.get("GATES_MODE"):                 # p. ej. humo técnico con gates simulados; el piloto usa manual
             self.reg.gates["mode"] = os.environ["GATES_MODE"]
-        self.today = today or date.today().isoformat()
+        from . import calendario
+        self.calendario = calendario.config()                # protocolo F5 v2: días de release y feriados del piloto (PILOT)
+        self.today = today or calendario.hoy_lima()
         self.examples: list[dict] = []           # F2-A: pares (mensajes ronda 0 → salida aprobada) para destilación
         self.rejections: list[dict] = []         # diagnóstico: salidas rechazadas por governance con sus hallazgos
 
@@ -104,7 +106,10 @@ class Orchestrator:
     # ---------- estado del requerimiento (lead time) ----------
     def _estado(self, req_id: str, **upd) -> dict:
         p = self._out_dir(req_id) / "estado.json"
+        from . import calendario
         st = json.loads(p.read_text(encoding="utf-8")) if p.exists() else {"req_id": req_id, "inicio": _now(), "estado": "en_curso"}
+        if "entrada_pipeline" not in st:                 # protocolo F5 v2 (C3): inicio del lead time = alta en el orquestador
+            st["entrada_pipeline"] = calendario.a_lima(st["inicio"])
         st.update(upd); p.write_text(json.dumps(st, ensure_ascii=False, indent=1), encoding="utf-8")
         return st
 
@@ -281,7 +286,9 @@ class Orchestrator:
                     "reporte_pruebas": {k: rt[k] for k in ("collected", "passed", "failed", "errors", "fallos")}}
         if agent_name == "release-manager-agent":
             q = verify.quality_facts(ctx)
-            return {"hoy": self.today, "estado_calidad": {**q, "veredicto_revision": ctx["code_review"]["veredicto"]},
+            from . import calendario
+            return {"hoy": self.today, "dias_release_permitidos": calendario.dias_release_desde(self.today, self.calendario),
+                    "estado_calidad": {**q, "veredicto_revision": ctx["code_review"]["veredicto"]},
                     "security_compliance": {"gates": ctx["security_compliance"]["gates"], "hallazgos": ctx["security_compliance"]["hallazgos"]},
                     "cicd_pipeline": [{"id": p["id"], "ambiente": p["ambiente"], "gates": p["gates"]} for p in ctx["cicd_pipeline"]["pipelines"]]}
         return None
@@ -313,10 +320,14 @@ class Orchestrator:
             self.run_agent("qa-automation-agent", self._special_payload("qa-automation-agent", ctx), ctx)
             review = self.run_agent("code-review-agent", self._special_payload("code-review-agent", ctx), ctx, force=True, defer_gate=True)
             q = verify.quality_facts(ctx)
+            from . import calendario
+            fecha = calendario.ahora_lima()       # protocolo F5 v2 (C5): defectos previos a la puerta, con etapa de origen y de detección
             for _ in range(q["pruebas_fallidas"]):
-                self.tel.emit(event="defect_detected", req_id=req_id, origen="qa-automation", ciclo=cycle)
+                self.tel.emit(event="defect_detected", req_id=req_id, origen="qa-automation", ciclo=cycle, deteccion="pre_gate",
+                              etapa_origen="backend-developer-agent", etapa_deteccion="qa-automation-agent", severidad="sin_clasificar", fecha=fecha)
             for h in [h for h in review["hallazgos"] if h["severidad"] == "critico"]:
-                self.tel.emit(event="defect_detected", req_id=req_id, origen="code-review", ciclo=cycle, find=h["id"])
+                self.tel.emit(event="defect_detected", req_id=req_id, origen="code-review", ciclo=cycle, find=h["id"], deteccion="pre_gate",
+                              etapa_origen="backend-developer-agent", etapa_deteccion="code-review-agent", severidad="critico", fecha=fecha)
             if (q["pruebas_fallidas"] == 0 and q["criticos"] == 0) or cycle == max_cycles:
                 break
             from .tools import sandbox
@@ -347,13 +358,13 @@ class Orchestrator:
 
     def run(self, req_id: str) -> dict:
         req_dir = self.root / "data/requerimientos" / req_id
-        ctx = {"req_id": req_id, "hoy": self.today}
+        ctx = {"req_id": req_id, "hoy": self.today, "calendario": self.calendario}
         nodes = [n for st in self.reg.dag["stages"] for n in (st.get("parallel") or [st])]
         stage_art = {n["id"]: ARTEFACT_NAME[n["agent"]] for n in nodes if n.get("agent")}
         st = self._estado(req_id)
         if st.get("estado") == "desplegado":
             return ctx
-        self.tel.emit(event="pipeline_started", req_id=req_id, dag=self.reg.dag["pipeline"], inicio=st["inicio"])
+        self.tel.emit(event="pipeline_started", req_id=req_id, dag=self.reg.dag["pipeline"], inicio=st["inicio"], entrada_pipeline=st["entrada_pipeline"])
         try:
             for stage in self.reg.dag["stages"]:
                 if stage.get("action") == "load_business_request":

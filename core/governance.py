@@ -140,7 +140,9 @@ def _f5_detail(agent_name: str, key: str, out: dict, ctx: dict, res: dict) -> tu
     if agent_name == "code-review-agent" and key == "verdict_consistent":
         return "veredicto debe ser cambios_requeridos si hay hallazgos criticos o pruebas fallidas, y aprobado en caso contrario", "veredicto"
     if agent_name == "release-manager-agent" and key == "window_valid":
-        return f"ventana debe ser un martes o jueves igual o posterior a hoy ({ctx.get('hoy')})", "release.ventana"
+        from . import calendario
+        dias = calendario.dias_release_desde(ctx.get("hoy") or calendario.hoy_lima(), ctx.get("calendario"))
+        return f"ventana debe ser uno de los días de release permitidos, igual o posterior a hoy ({ctx.get('hoy')}): {', '.join(dias)}", "release.ventana"
     if agent_name == "release-manager-agent" and key == "decision_consistent":
         q = verify.quality_facts(ctx)
         return f"decision inconsistente con los hechos: {q['pruebas_fallidas']} pruebas fallidas de {q['pruebas_total']}, {q['criticos']} hallazgos críticos; go solo si todo está en verde y todo el checklist se cumple", "release.decision"

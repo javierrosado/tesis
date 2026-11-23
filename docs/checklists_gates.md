@@ -1,6 +1,6 @@
 # Checklist de aprobación por tipo de gate (protocolo F5 v2, criterio C7)
 
-- **Estado:** borrador v0.9, pendiente de aprobación del autor. Al aprobarse pasa a v1.0, se registra el commit y **no cambia durante el piloto** (30/11 – 11/12/2026).
+- **Estado:** **v1.0, aprobada por el autor el 23/11/2026** (PR #12). Queda fija y **no cambia durante el piloto** (30/11 – 11/12/2026). Un ensayo informal previo no la modifica.
 - **Quién lo aplica:** el autor, único aprobador humano de los gates de riesgo alto.
 - **Para qué:** fijar el criterio antes de ver los artefactos y así acotar el sesgo del aprobador único (limitación 4 del Plan V2.7).
 
@@ -73,4 +73,4 @@ Cada decisión se registra con `scripts/pilot_control.py lote`: hora real, hash 
 | Versión | Fecha | Cambio | Commit |
 |---|---|---|---|
 | 0.9 | 23/11/2026 | Borrador para aprobación del autor | (este PR) |
-| 1.0 | | Aprobado por el autor; queda fijo para el piloto | |
+| 1.0 | 23/11/2026 | Aprobado por el autor; queda fijo para el piloto | PR #12 |

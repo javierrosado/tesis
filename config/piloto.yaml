@@ -13,3 +13,17 @@ piloto1:
   observacion:
     fallo_despliegue_dias_habiles: 3   # H2: rollback o corrección dentro de este plazo cuenta como despliegue fallido
     defecto_escapado_dias_habiles: 5   # H3: o hasta la fecha de fin, lo que ocurra primero
+
+# Ensayo informal previo al piloto (decisión del autor, 23/11/2026): sirve para evaluar el flujo y hacer ajustes antes
+# del arranque formal. Sus resultados NO se reportan como resultados del piloto; se declaran en la bitácora.
+ensayo1:
+  zona_horaria: America/Lima
+  inicio: 2026-11-24
+  fin: 2026-11-27
+  ventanas_aprobacion: ["09:00", "17:00"]
+  dias_release: [2026-11-24, 2026-11-26]
+  feriados: []
+  despliegue: por_requerimiento
+  observacion:
+    fallo_despliegue_dias_habiles: 3
+    defecto_escapado_dias_habiles: 5

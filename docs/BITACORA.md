@@ -25,6 +25,7 @@ Registro cronológico de actividades, decisiones y dificultades de la implementa
 | 20/11/2026 | Datos | Documentación de fuentes sintéticas y reales; verificación de fuga piloto/entrenamiento (`scripts/verificar_fuga.py`) | 0 ids y 0 títulos en común; similitud máx. 0,655 < 0,67 (referencia entre requerimientos de entrenamiento): sin fuga | — |
 | 20/11/2026 | Repositorio | El proveedor de pruebas `mock` se renombra `prueba_offline` (se mantiene `mock` como alias) | README 2.1–2.5: infraestructura, proveedor de pruebas, jobs y flujos | "Mock" se leía como resultados simulados; el nuevo nombre indica que solo prueba el software sin modelo |
 | 23/11/2026 | F5 | Implementación del protocolo v2: calendario del piloto, marcas de lead time, defectos pre-gate y escapados, resultado por despliegue, H1–H6, contraste estadístico, checklist de gates (borrador) | Release del feriado 08/12 movido al 09/12; salidas del piloto en un dataset privado (`tesis-piloto`) | El recordatorio de arranque del 23/11 no se ejecutó: el protocolo v2 movió el piloto al 30/11 (D8) |
+| 23/11/2026 | F5 | Checklist de gates aprobado (v1.0); `tesis-runs` pasa a privado; el autor pasa a privados `tesis` y `tesis-sandbox`; se define un ensayo informal (`ensayo1`, 24–27/11) | El ensayo sirve para evaluar el flujo y hacer ajustes; sus resultados no se reportan como resultados del piloto | — |
 | 30/11–11/12/2026 | F5 | Piloto en preproducción con los 30 requerimientos del squad (protocolo v2) | Pendiente | — |
 
 ## Decisiones metodológicas (resumen)
@@ -40,3 +41,4 @@ Registro cronológico de actividades, decisiones y dificultades de la implementa
 | Opción A | Decisión humana en lote con dictamen de IA registrado aparte | Reduce la carga sin falsear el dato humano; permite medir la concordancia humano–IA |
 | Release | Solo un hallazgo de seguridad crítico bloquea; mayor y menor van al backlog | Alineado con la política escrita ("puertas de seguridad definidas") |
 | Datos | Sintéticos solo para entrenar; línea base y piloto con datos reales | No existe corpus etiquetado y los requerimientos de la Empresa son confidenciales; la medición debe hacerse sobre datos reales |
+| Ensayo previo | Ensayo informal `ensayo1` (24–27/11) antes del piloto formal | Detectar fallas del flujo con los modelos reales sin consumir el piloto; se declara y no se reporta como resultado |

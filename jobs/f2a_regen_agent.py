@@ -13,7 +13,8 @@ from pathlib import Path
 BRANCH = os.environ.get("BRANCH", "f3-qlora"); TEACHER = os.environ.get("TEACHER", "Qwen/Qwen3-32B-AWQ")
 AGENT = os.environ["AGENT"]; SRC = os.environ["SRC_REPO"]; DST = os.environ["DST_REPO"]; WORKERS = int(os.environ.get("WORKERS", "16"))
 url = f"https://github.com/javierrosado/tesis/archive/refs/heads/{BRANCH}.tar.gz"
-tarfile.open(fileobj=io.BytesIO(urllib.request.urlopen(url).read())).extractall("/tmp", filter="data")
+_auth = {"Authorization": "token " + os.environ["GITHUB_TOKEN"]} if os.environ.get("GITHUB_TOKEN") else {}  # repo privado desde el 23/11/2026
+tarfile.open(fileobj=io.BytesIO(urllib.request.urlopen(urllib.request.Request(url, headers=_auth)).read())).extractall("/tmp", filter="data")
 ROOT = Path(f"/tmp/tesis-{BRANCH.replace('/', '-')}"); os.chdir(ROOT); sys.path.insert(0, str(ROOT))
 srv = subprocess.Popen([sys.executable, "-m", "vllm.entrypoints.openai.api_server", "--model", TEACHER, "--port", "8000",
                         "--max-model-len", "20000", "--gpu-memory-utilization", "0.92", "--max-num-seqs", "48"],

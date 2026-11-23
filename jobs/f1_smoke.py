@@ -16,7 +16,8 @@ RUNS_REPO = os.environ["RUNS_REPO"]                       # dataset privado, p. 
 RUN_NAME = os.environ.get("RUN_NAME", "f1_smoke")
 
 url = f"https://github.com/javierrosado/tesis/archive/refs/heads/{BRANCH}.tar.gz"
-tarfile.open(fileobj=io.BytesIO(urllib.request.urlopen(url).read())).extractall("/tmp", filter="data")
+_auth = {"Authorization": "token " + os.environ["GITHUB_TOKEN"]} if os.environ.get("GITHUB_TOKEN") else {}  # repo privado desde el 23/11/2026
+tarfile.open(fileobj=io.BytesIO(urllib.request.urlopen(urllib.request.Request(url, headers=_auth)).read())).extractall("/tmp", filter="data")
 root = f"/tmp/tesis-{BRANCH}"
 os.chdir(root)
 env = dict(os.environ, PIPELINE_PROVIDER="hf_local")

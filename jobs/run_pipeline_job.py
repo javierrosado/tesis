@@ -18,7 +18,8 @@ from pathlib import Path
 BRANCH = os.environ.get("BRANCH", "main"); PILOT = os.environ["PILOT"]; RUNS = os.environ["RUNS_REPO"]
 BASE = os.environ.get("BASE", "Qwen/Qwen3-8B"); WORKERS = int(os.environ.get("WORKERS", "8"))
 url = f"https://github.com/javierrosado/tesis/archive/refs/heads/{BRANCH}.tar.gz"
-tarfile.open(fileobj=io.BytesIO(urllib.request.urlopen(url).read())).extractall("/tmp", filter="data")
+_auth = {"Authorization": "token " + os.environ["GITHUB_TOKEN"]} if os.environ.get("GITHUB_TOKEN") else {}  # repo privado desde el 23/11/2026
+tarfile.open(fileobj=io.BytesIO(urllib.request.urlopen(urllib.request.Request(url, headers=_auth)).read())).extractall("/tmp", filter="data")
 ROOT = Path(f"/tmp/tesis-{BRANCH.replace('/', '-')}"); os.chdir(ROOT); sys.path.insert(0, str(ROOT))
 from core.envinfo import report as _entorno  # noqa: E402
 ENTORNO = _entorno({"job": os.environ.get("JOB_ID", "local"), "branch": BRANCH})

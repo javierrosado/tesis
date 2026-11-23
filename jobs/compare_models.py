@@ -17,7 +17,8 @@ BRANCH = os.environ.get("BRANCH", "main")
 MODELS = os.environ.get("MODELS", "Qwen/Qwen3-8B meta-llama/Llama-3.1-8B-Instruct mistralai/Mistral-7B-Instruct-v0.3").split()
 AGENTS = os.environ.get("AGENTS", "product-analyst-agent solution-architect-agent api-designer-agent test-case-generator-agent cicd-pipeline-agent").split()
 url = f"https://github.com/javierrosado/tesis/archive/refs/heads/{BRANCH}.tar.gz"
-tarfile.open(fileobj=io.BytesIO(urllib.request.urlopen(url).read())).extractall("/tmp", filter="data")
+_auth = {"Authorization": "token " + os.environ["GITHUB_TOKEN"]} if os.environ.get("GITHUB_TOKEN") else {}  # repo privado desde el 23/11/2026
+tarfile.open(fileobj=io.BytesIO(urllib.request.urlopen(urllib.request.Request(url, headers=_auth)).read())).extractall("/tmp", filter="data")
 ROOT = Path(f"/tmp/tesis-{BRANCH.replace('/', '-')}"); os.chdir(ROOT); sys.path.insert(0, str(ROOT)); sys.path.insert(0, str(ROOT / "scripts"))
 from core.envinfo import report as _entorno  # noqa: E402
 ENTORNO = _entorno({"job": os.environ.get("JOB_ID", "local"), "branch": BRANCH})

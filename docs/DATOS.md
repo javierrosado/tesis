@@ -36,7 +36,7 @@ En esta tesis **los datos sintéticos se usan solo para entrenar** los adaptador
 ## 3. Por qué el entrenamiento usa datos sintéticos
 
 1. **No existe un corpus etiquetado.** No hay un conjunto público, en español, de requerimientos con las salidas que esperan los contratos de estos agentes (historias con criterios Given/When/Then, OpenAPI, workflows de GitHub Actions…). Etiquetar a mano unos 1 000 ejemplos no era viable en el plazo de la tesis.
-2. **Confidencialidad.** Entrenar con requerimientos de la Empresa dejaría información de negocio dentro de un modelo y un dataset públicos. Los datos reales se reservaron para la medición, donde se publican anonimizados.
+2. **Confidencialidad.** Entrenar con requerimientos de la Empresa dejaría información de negocio dentro de un modelo y un dataset públicos. Los datos reales se reservaron para la medición; se guardan anonimizados en repositorios privados, con acceso por invitación (Plan V2.7, 4.6).
 3. **Es una técnica establecida.** Generar ejemplos con un modelo, filtrar los inválidos y ajustar con ellos es el esquema de Self-Instruct (Wang et al., 2023). Entrenar un modelo menor con salidas de uno mayor es destilación (Hsieh et al., 2023). Long et al. (2024) revisan la generación, curación y evaluación de datos sintéticos con LLM.
 
 ## 4. Controles de calidad aplicados

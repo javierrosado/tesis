@@ -180,7 +180,7 @@ flowchart LR
 | Componente | Qué es | Para qué se usa en la tesis | Qué ejecuta o guarda | Evidencia |
 |---|---|---|---|---|
 | **PC del autor** | Windows x64 sin GPU, con Python 3.10 | Escribir código, correr las pruebas, lanzar los jobs de GPU y calcular los indicadores | `pytest` con el proveedor `prueba_offline` (sin modelo), CLI `hf jobs`, `scripts/indicadores.py` | 38 pruebas en verde |
-| **GitHub · `javierrosado/tesis`** | Repositorio público (este) | Código fuente, control de versiones y trazabilidad | Agentes, orquestador, jobs, notebooks, `docs/BITACORA.md`, `runs/MANIFEST.md`, Excel de línea base | PR #1 a #9, cada uno aprobado por el autor |
+| **GitHub · `javierrosado/tesis`** | Repositorio privado (este), con acceso por invitación desde el 23/11/2026 | Código fuente, control de versiones y trazabilidad | Agentes, orquestador, jobs, notebooks, `docs/BITACORA.md`, `runs/MANIFEST.md`, Excel de línea base | PR #1 a #9, cada uno aprobado por el autor |
 | **GitHub Actions · CI** | Runner `ubuntu-latest`, sin GPU | Comprobar en cada cambio que el código del pipeline funciona | `pytest -q` y un dry-run con el proveedor `prueba_offline`, sin modelo (ver 2.3) | Pestaña *Actions* del repo |
 | **Google Colab** | Notebooks en la nube, sin GPU | Que cualquier lector reproduzca el EDA sin instalar nada | `eda_linea_base.ipynb` y `eda_datasets_entrenamiento.ipynb` | Botones "Abrir en Colab" (7.3) |
 | **HF Hub** | Almacenamiento de modelos y datos de Hugging Face | Descargar los modelos base y publicar lo que produce la tesis | Pesos de `Qwen/*` (de la organización Qwen); 5 LoRA, `tesis-sft-v2` y `tesis-runs` (públicos, cuenta `jrosado1974`) | Enlaces en la sección 6 |
@@ -509,11 +509,11 @@ Ejemplo de entorno registrado en un job (`core/envinfo.py`, 20/11/2026): `NVIDIA
 
 | Dataset | Contenido | Uso | Acceso |
 |---|---|---|---|
-| [`data/linea_base/Linea_BaseV2.xlsx`](data/linea_base/) | 6 proyectos, 150 requerimientos, 83 defectos, 40 despliegues, 666 handoffs | Línea base OE1 | Público |
-| [`data/requerimientos/`](data/requerimientos/) | 30 requerimientos del Squad Fuerza de Ventas (SIM-P05) | Piloto y pruebas de humo (nunca se usaron para entrenar) | Público |
+| [`data/linea_base/Linea_BaseV2.xlsx`](data/linea_base/) | 6 proyectos, 150 requerimientos, 83 defectos, 40 despliegues, 666 handoffs | Línea base OE1 | **Privado** (repositorio con acceso por invitación) |
+| [`data/requerimientos/`](data/requerimientos/) | 30 requerimientos del Squad Fuerza de Ventas (SIM-P05) | Piloto y pruebas de humo (nunca se usaron para entrenar) | **Privado** (repositorio con acceso por invitación) |
 | [`data/knowledge/`](data/knowledge/) | Reglas de negocio, ADRs, políticas, glosario, especificaciones | Corpus de knowledge-rag | Público |
 | [jrosado1974/tesis-sft-v2](https://huggingface.co/datasets/jrosado1974/tesis-sft-v2) | **1 013 ejemplos** (train 810 · val 116 · test 87) de 5 agentes | Entrenamiento y evaluación | Público |
-| [jrosado1974/tesis-runs](https://huggingface.co/datasets/jrosado1974/tesis-runs) | Resultados de evaluación, comparación, telemetría y estado de corridas | Evidencia de resultados | Público |
+| [jrosado1974/tesis-runs](https://huggingface.co/datasets/jrosado1974/tesis-runs) | Resultados de evaluación, comparación, telemetría y estado de corridas | Evidencia de resultados | **Privado** desde el 23/11/2026 (contiene artefactos de requerimientos de la Empresa; acceso por invitación) |
 | jrosado1974/tesis-piloto | Telemetría, estado, aprobaciones y registros del piloto F5 (`RUNS_REPO` del piloto) | Evidencia del piloto | **Privado** (datos de la Empresa; acceso por invitación) |
 | tesis-sft-pilot, tesis-sft, tesis-sft-r2, tesis-sft-final | Etapas intermedias de la destilación | Linaje de tesis-sft-v2 | Privado |
 
@@ -542,7 +542,7 @@ Verificación de que el piloto no está en el entrenamiento (`python scripts/ver
 | Para | Necesitas |
 |---|---|
 | Pruebas locales y EDA | Python 3.10+ y git. Sin GPU ni cuentas |
-| Experimentos en GPU | Cuenta de Hugging Face con saldo para [Jobs](https://huggingface.co/docs/huggingface_hub/guides/jobs) (o plan PRO), token con permiso de escritura y la CLI `hf` |
+| Experimentos en GPU | Cuenta de Hugging Face con saldo para [Jobs](https://huggingface.co/docs/huggingface_hub/guides/jobs) (o plan PRO), token con permiso de escritura y la CLI `hf`. Como el repositorio es privado, cada job necesita además `--secrets GITHUB_TOKEN` (token con lectura de `javierrosado/tesis`) para descargar el código |
 | Llama-3.1-8B en la comparación | Aceptar su licencia en su página de Hugging Face |
 | Despliegue a staging | Un repositorio de GitHub propio y un token con permisos Contents, Actions y Workflows |
 
@@ -557,6 +557,8 @@ PIPELINE_PROVIDER=prueba_offline python scripts/run_pipeline.py --req SIM-P05-R0
 ```
 
 ### 7.3 EDA (sin GPU, en Colab o local)
+
+> El repositorio es privado desde el 23/11/2026 porque contiene datos anonimizados de la Empresa (Plan V2.7, 4.6). Para abrir los notebooks en Colab hay que autorizar el acceso a GitHub con una cuenta invitada; también se pueden ejecutar en local tras clonar el repositorio.
 
 | Notebook | Abrir en Colab | Resultado esperado |
 |---|---|---|

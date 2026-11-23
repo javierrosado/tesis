@@ -8,7 +8,9 @@
 - Restaura el estado del piloto desde el Hub (artefactos, decisiones, aprobaciones humanas), ejecuta hasta el
   siguiente gate pendiente o hasta el despliegue, y vuelve a publicar el estado y la telemetría.
 Variables: BRANCH, PILOT (nombre del piloto), REQS (coma) o ALL=1, RUNS_REPO, ADAPTERS ('agente=repo ...'),
-           TODAY (AAAA-MM-DD, opcional), DEPLOY_REPO (opcional), WORKERS."""
+           TODAY (AAAA-MM-DD, opcional; por defecto la fecha de Lima), DEPLOY_REPO (opcional), WORKERS.
+Protocolo F5 v2: si PILOT está en config/piloto.yaml (p. ej. piloto1), el orquestador usa su calendario (días de release
+y feriados). Para el piloto real, RUNS_REPO apunta al dataset privado <usuario>/tesis-piloto."""
 import io, json, os, subprocess, sys, tarfile, time, urllib.request
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path

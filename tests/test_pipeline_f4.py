@@ -46,7 +46,7 @@ def test_pruebas_reales_pasan_y_detectan_defecto():
 def test_release_no_go_inconsistente_rechazado():
     rel = F("release-manager-agent"); rel["release"]["ventana"] = "2026-11-25"   # miércoles
     v, ok, _ = governance.review(REG.agents["release-manager-agent"], rel, CTX, 0)
-    assert not ok and any("martes o jueves" in h["detalle"] for h in v["hallazgos"])
+    assert not ok and any("días de release permitidos" in h["detalle"] for h in v["hallazgos"])
 
 
 def test_flujo_manual_reanudable(tmp_path, monkeypatch):

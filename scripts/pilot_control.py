@@ -6,6 +6,14 @@
   python scripts/pilot_control.py decidir --pilot humo16 --req SIM-P05-R001 --artefacto user_story_set --decision approved [--motivo "..."]
   python scripts/pilot_control.py estado --pilot humo16
   python scripts/pilot_control.py lote --pilot piloto1 --archivo decisiones.json     # opción A (20/11/2026)
+  python scripts/pilot_control.py calendario --pilot piloto1                          # protocolo v2: fechas, releases y feriados
+  python scripts/pilot_control.py defecto --pilot piloto1 --req SIM-P05-R004 --etapa-deteccion aceptacion --severidad mayor --descripcion "..."
+  python scripts/pilot_control.py despliegue --pilot piloto1 --req SIM-P05-R004 --resultado rollback --motivo "..."
+
+Protocolo v2 (C5, C6): los defectos escapados (detectados en el smoke test, en staging o en la verificación de aceptación)
+y los rollback o correcciones posteriores al despliegue se registran aquí, con hora real de Lima, en
+piloto/<piloto>/registros/*.jsonl. scripts/indicadores.py los lee junto con la telemetría.
+Las salidas del piloto real van a un dataset privado: RUNS_REPO=<usuario>/tesis-piloto.
 
 Opción A: en cada ventana (09:00 / 17:00) el asistente prepara un dictamen por artefacto pendiente (resumen, hallazgos,
 recomendación). Javier decide en lote; cada registro guarda su decisión (humana, con hora real y hash) y, aparte, el
@@ -19,7 +27,10 @@ Formato de decisiones.json:
 import argparse, json, os, sys
 from datetime import datetime, timezone
 from pathlib import Path
-from huggingface_hub import CommitOperationAdd, HfApi, snapshot_download
+from huggingface_hub import CommitOperationAdd, HfApi, hf_hub_download, snapshot_download
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from core import calendario  # noqa: E402
 
 RUNS = os.environ.get("RUNS_REPO") or f"{os.environ['HF_USERNAME']}/tesis-runs"
 
@@ -81,10 +92,49 @@ def estado(a):
         print(req, json.loads(f.read_text(encoding="utf-8")) if f.exists() else "-")
 
 
+def _append(pilot: str, nombre: str, reg: dict) -> None:
+    """Agrega una línea a piloto/<pilot>/registros/<nombre>.jsonl en el Hub (lee lo existente y vuelve a subirlo)."""
+    ruta = f"piloto/{pilot}/registros/{nombre}.jsonl"
+    try:
+        previo = Path(hf_hub_download(RUNS, ruta, repo_type="dataset", force_download=True)).read_text(encoding="utf-8")
+    except Exception:
+        previo = ""
+    HfApi().upload_file(path_or_fileobj=(previo + json.dumps(reg, ensure_ascii=False) + "\n").encode(), repo_id=RUNS, repo_type="dataset",
+                        path_in_repo=ruta, commit_message=f"{pilot} {reg['req_id']} {reg['event']}")
+    print(json.dumps(reg, ensure_ascii=False))
+
+
+def calendario_cmd(a):
+    cfg = calendario.config(a.pilot)
+    if not cfg:
+        sys.exit(f"{a.pilot} no está en config/piloto.yaml")
+    print(json.dumps(cfg, ensure_ascii=False, indent=1, default=str))
+
+
+def defecto(a):
+    reg = {"event": "defect_detected", "req_id": a.req, "deteccion": "escapado", "etapa_deteccion": a.etapa_deteccion,
+           "etapa_origen": a.etapa_origen or "no_determinada", "severidad": a.severidad, "descripcion": a.descripcion,
+           "fecha": calendario.ahora_lima(), "registrado_por": a.por, "ts": datetime.now(timezone.utc).isoformat(timespec="seconds")}
+    _append(a.pilot, "defectos_escapados", reg)
+
+
+def despliegue(a):
+    reg = {"event": "deployment_outcome", "req_id": a.req, "deployment_id": f"DEP-{a.req}", "resultado": a.resultado, "motivo": a.motivo,
+           "fecha": calendario.ahora_lima(), "registrado_por": a.por, "ts": datetime.now(timezone.utc).isoformat(timespec="seconds")}
+    _append(a.pilot, "post_despliegue", reg)
+
+
 ap = argparse.ArgumentParser(); sp = ap.add_subparsers(dest="cmd", required=True)
-for n in ("pendientes", "estado"):
+for n in ("pendientes", "estado", "calendario"):
     x = sp.add_parser(n); x.add_argument("--pilot", required=True)
 x = sp.add_parser("decidir"); x.add_argument("--pilot", required=True); x.add_argument("--req", required=True); x.add_argument("--artefacto", required=True)
 x.add_argument("--decision", choices=["approved", "returned"], required=True); x.add_argument("--motivo"); x.add_argument("--por", default="Javier Rosado")
 x = sp.add_parser("lote"); x.add_argument("--pilot", required=True); x.add_argument("--archivo", required=True)
-a = ap.parse_args(); {"pendientes": pendientes, "decidir": decidir, "estado": estado, "lote": lote}[a.cmd](a)
+x = sp.add_parser("defecto"); x.add_argument("--pilot", required=True); x.add_argument("--req", required=True)
+x.add_argument("--etapa-deteccion", choices=["smoke", "staging", "aceptacion"], required=True)
+x.add_argument("--severidad", choices=["critica", "alta", "media", "baja"], required=True); x.add_argument("--descripcion", required=True)
+x.add_argument("--etapa-origen", help="agente donde se originó, si se sabe"); x.add_argument("--por", default="Javier Rosado")
+x = sp.add_parser("despliegue"); x.add_argument("--pilot", required=True); x.add_argument("--req", required=True)
+x.add_argument("--resultado", choices=["rollback", "correccion"], required=True); x.add_argument("--motivo", required=True); x.add_argument("--por", default="Javier Rosado")
+a = ap.parse_args()
+{"pendientes": pendientes, "decidir": decidir, "estado": estado, "lote": lote, "calendario": calendario_cmd, "defecto": defecto, "despliegue": despliegue}[a.cmd](a)

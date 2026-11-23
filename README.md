@@ -6,7 +6,7 @@ Un requerimiento de negocio entra al pipeline y **16 agentes** lo transforman, d
 
 Todo funciona con **modelos de lenguaje de pesos abiertos** (sin APIs comerciales). Cinco agentes tienen un **adaptador QLoRA propio**, entrenado para esta tesis.
 
-> **Estado al 20/11/2026:** pipeline de 16 agentes implementado y probado de punta a punta; 5 adaptadores entrenados y evaluados; comparación de modelos base ejecutada; despliegue real validado. **Piloto real con 30 requerimientos: del 23/11 al 04/12/2026.**
+> **Estado al 20/11/2026:** pipeline de 16 agentes implementado y probado de punta a punta; 5 adaptadores entrenados y evaluados; comparación de modelos base ejecutada; despliegue real validado. **Piloto real con 30 requerimientos: del 30/11 al 11/12/2026** (protocolo v2).
 
 ---
 
@@ -110,14 +110,14 @@ Cada fase entrega algo que usa la siguiente. Las fechas, decisiones y dificultad
 | **Procesamiento** | Pruebas de humo en A100 (`jobs/run_pipeline_job.py`); corrección de 13 fallas; decisión **D-F4-1** (el maestro atiende a backend, QA y code-review); prueba del flujo de gates manuales; despliegue a `tesis-sandbox` |
 | **Salida** | Dos requerimientos recorrieron los 16 agentes hasta un release *no-go* justificado (sección 2.6). Despliegue real validado (run 44764311596: test ✔ y deploy ✔). Flujo de aprobación humana probado (opción A). Costo ≈ USD 3,84 |
 
-#### F5 · Piloto (23/11 – 04/12/2026) ⏳ programado
+#### F5 · Piloto (30/11 – 11/12/2026, protocolo v2) ⏳ programado
 
 | | |
 |---|---|
-| **Objetivo** | Verificar el pipeline en el caso real y contrastar sus indicadores con la línea base (OE4) |
-| **Entrada** | Los 30 requerimientos del Squad Fuerza de Ventas ([`data/requerimientos/`](data/requerimientos/)), los modelos de F3 y F4, y las decisiones humanas del autor |
-| **Procesamiento** | `jobs/run_pipeline_job.py` con `GATES_MODE=manual`: el pipeline se detiene en cada gate de riesgo alto; el autor decide en ventanas de 09:00 y 17:00 con un dictamen de IA registrado aparte (`scripts/pilot_control.py lote`); los releases *go* se despliegan en el sandbox. Tope de gasto: USD 10 |
-| **Salida esperada** | Telemetría por requerimiento y los indicadores H1–H6 del piloto calculados con `scripts/indicadores.py`, para contrastarlos con los de OE1 en la tesis |
+| **Objetivo** | Evaluar el pipeline en preproducción, con despliegues reales a *staging*, y contrastar sus indicadores con la línea base (OE4) |
+| **Entrada** | Los 30 requerimientos del Squad Fuerza de Ventas ([`data/requerimientos/`](data/requerimientos/)): 27 históricos, emparejados con su registro en la línea base, y 3 nuevos. Los modelos de F3 y F4, el calendario del piloto ([`config/piloto.yaml`](config/piloto.yaml)), el checklist de gates fijado antes del arranque ([`docs/checklists_gates.md`](docs/checklists_gates.md)) y las decisiones humanas del autor |
+| **Procesamiento** | `jobs/run_pipeline_job.py` con `PILOT=piloto1` y `GATES_MODE=manual`. El pipeline se detiene en cada gate de riesgo alto; el autor decide en ventanas de 09:00 y 17:00 aplicando el checklist, con un dictamen de IA registrado aparte (`scripts/pilot_control.py lote`). Los releases *go* se despliegan en staging los días de release (01/12, 03/12, 09/12 y 10/12; el feriado del 08/12 pasa al 09/12), un despliegue por requerimiento. Los defectos escapados y los rollback o correcciones se registran con `pilot_control.py defecto` y `despliegue`. Las salidas van a un dataset privado. Tope de gasto: USD 10 |
+| **Salida esperada** | Marcas de tiempo `entrada_pipeline`, `go_release` y `deploy_ok_staging` por requerimiento; H1a, H1b, H2, H3, H3′, H4–H6 con `scripts/indicadores.py`; contraste estadístico con la línea base con `scripts/contraste.py` (Wilcoxon, Mann-Whitney, Fisher, McNemar, Holm, IC de Newcombe y Clopper-Pearson) |
 
 **Transversal · Reproducibilidad (20/11/2026) ✅.** Versiones fijadas en cada job, registro de hardware y versiones (`core/envinfo.py`), notebooks de EDA ejecutados, verificación de fuga (`scripts/verificar_fuga.py`) y repetición de la evaluación de DevOps con resultado idéntico (9/9). Detalle en la sección 7.
 
@@ -514,6 +514,7 @@ Ejemplo de entorno registrado en un job (`core/envinfo.py`, 20/11/2026): `NVIDIA
 | [`data/knowledge/`](data/knowledge/) | Reglas de negocio, ADRs, políticas, glosario, especificaciones | Corpus de knowledge-rag | Público |
 | [jrosado1974/tesis-sft-v2](https://huggingface.co/datasets/jrosado1974/tesis-sft-v2) | **1 013 ejemplos** (train 810 · val 116 · test 87) de 5 agentes | Entrenamiento y evaluación | Público |
 | [jrosado1974/tesis-runs](https://huggingface.co/datasets/jrosado1974/tesis-runs) | Resultados de evaluación, comparación, telemetría y estado de corridas | Evidencia de resultados | Público |
+| jrosado1974/tesis-piloto | Telemetría, estado, aprobaciones y registros del piloto F5 (`RUNS_REPO` del piloto) | Evidencia del piloto | **Privado** (datos de la Empresa; acceso por invitación) |
 | tesis-sft-pilot, tesis-sft, tesis-sft-r2, tesis-sft-final | Etapas intermedias de la destilación | Linaje de tesis-sft-v2 | Privado |
 
 **Cómo se generaron los datos de entrenamiento (linaje):** `scripts/gen_seeds.py` crea requerimientos sintéticos → el modelo maestro `Qwen3-32B-AWQ` ejecuta el pipeline (`jobs/f2a_distill.py`) → governance acepta o rechaza cada salida → 1 165 ejemplos aprobados (`tesis-sft-final`) → re-filtrado con governance v2 (852) + 161 ejemplos de DevOps regenerados (`jobs/f2a_regen_agent.py`) = **1 013** (`tesis-sft-v2`). Las particiones son por requerimiento: no hay fuga entre train/val/test ni con el piloto (verificado en el notebook de EDA).
@@ -624,6 +625,16 @@ hf jobs uv run --flavor a100-large --timeout 1h --secrets HF_TOKEN \
 
 ```bash
 python scripts/indicadores.py <carpeta>/telemetria/*.jsonl --md indicadores.md
+```
+
+**f) Hipótesis del piloto y contraste con la línea base (protocolo v2):**
+
+```bash
+# 1) indicadores H1–H6 por requerimiento (telemetría + registros de defectos escapados y post-despliegue + estado)
+python scripts/indicadores.py <carpeta>/telemetria/*.jsonl <carpeta>/registros/*.jsonl \
+  --estado <carpeta>/estado --piloto piloto1 --csv-req piloto_por_req.csv --md indicadores.md
+# 2) contraste estadístico contra Linea_BaseV2.xlsx (G1′ emparejado y G1*)
+python scripts/contraste.py --piloto piloto_por_req.csv --md contraste.md --json contraste.json
 ```
 
 ### 7.5 ¿Qué tan comparables serán los resultados?

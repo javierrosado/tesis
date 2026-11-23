@@ -5,7 +5,14 @@ Reglas:
 - Solo despliega si el release (release-manager) es go y su gate fue aprobado.
 - Respeta la ventana: si hoy < ventana, el requerimiento queda programado (Scheduled) y se reanuda luego.
 - Un despliegue cuenta para H4 cuando llega al job de despliegue; es fallido (H2) si ese job falla.
-- Sin acceso al sandbox (DEPLOY_REPO/GITHUB_TOKEN), queda en modo validación y se marca como tal (no se reporta como despliegue)."""
+- Sin acceso al sandbox (DEPLOY_REPO/GITHUB_TOKEN), queda en modo validación y se marca como tal (no se reporta como despliegue).
+
+Protocolo F5 v2 (20/11/2026):
+- Un despliegue por requerimiento (deployment_id = DEP-<req>), con número de intento.
+- Marcas de tiempo del lead time en estado.json (hora de Lima): go_release (H1a) cuando el release es go y su gate
+  está aprobado, y deploy_ok_staging (H1b) cuando el despliegue a staging termina bien.
+- resultado ∈ {ok, fallo_build, fallo_pytest, fallo_smoke}; rollback y corrección dentro de la ventana de
+  observación (3 días hábiles) se registran después con scripts/pilot_control.py despliegue."""
 import base64, json, os, time, urllib.error, urllib.request
 from datetime import date, datetime, timezone
 
@@ -76,14 +83,46 @@ def _wait_run(repo: str, sha: str, timeout_s: int = 900) -> dict:
     return {"conclusion": "timeout"}
 
 
+def clasificar(res: dict) -> tuple[str, bool, bool]:
+    """resultado del protocolo v2 a partir de los jobs de GitHub Actions: (resultado, alcanzo_deploy, fallido)."""
+    jobs = res.get("jobs", [])
+    deploy_jobs = [j for j in jobs if "deploy" in j["nombre"].lower()]
+    reached = bool(deploy_jobs) and all(j["conclusion"] not in ("skipped", None) for j in deploy_jobs)
+    failed = reached and any(j["conclusion"] != "success" for j in deploy_jobs)
+    if reached and not failed:
+        return "ok", True, False
+    malos = [j["nombre"].lower() for j in jobs if j["conclusion"] not in ("success", "skipped", None)]
+    if any("build" in n or "install" in n or "lint" in n for n in malos):
+        return "fallo_build", reached, True
+    if any("test" in n or "pytest" in n for n in malos) or not reached:
+        return "fallo_pytest", reached, True
+    return "fallo_smoke", reached, True                      # el job de deploy corre deploy.sh, que hace el smoke test
+
+
+def _marca_go_release(orch, req_id: str) -> str:
+    """go_release = hora en que se aprobó el gate del release go (hora real del humano o, en riesgo bajo, la de la política)."""
+    from . import calendario
+    st = orch._estado(req_id)
+    if st.get("go_release"):
+        return st["go_release"]
+    saved = orch._load(req_id, "release_plan")
+    ts = (saved[1].get("gate") or {}).get("ts") if saved else None
+    marca = calendario.a_lima(ts) if ts else calendario.ahora_lima()
+    orch._estado(req_id, go_release=marca)
+    orch.tel.emit(event="marca_tiempo", req_id=req_id, marca="go_release", valor=marca)
+    return marca
+
+
 def run(orch, ctx: dict) -> None:
     from .orchestrator import Scheduled, _now
+    from . import calendario
     req_id = ctx["req_id"]
     rel = ctx.get("release_plan", {}).get("release", {})
     if rel.get("decision") != "go":
         orch.tel.emit(event="deploy_skipped", req_id=req_id, reason="no-go")
         orch._estado(req_id, estado="no_go")
         return
+    _marca_go_release(orch, req_id)
     if date.fromisoformat(orch.today) < date.fromisoformat(rel["ventana"]):
         orch.tel.emit(event="deploy_scheduled", req_id=req_id, ventana=rel["ventana"])
         raise Scheduled(rel["ventana"])
@@ -95,15 +134,23 @@ def run(orch, ctx: dict) -> None:
         return
     sha = _push(repo, f"req/{req_id}", files, f"{req_id} {rel['id']} v{rel['version']}")
     res = _wait_run(repo, sha)
-    deploy_jobs = [j for j in res.get("jobs", []) if "deploy" in j["nombre"].lower()]
-    reached = bool(deploy_jobs) and all(j["conclusion"] not in ("skipped", None) for j in deploy_jobs)
-    failed = reached and any(j["conclusion"] != "success" for j in deploy_jobs)
-    ev = {"event": "deployment", "req_id": req_id, "release": rel["id"], "version": rel["version"], "sha": sha, "run": res.get("url"),
-          "conclusion": res.get("conclusion"), "alcanzo_deploy": reached, "fallido": failed, "jobs": res.get("jobs"),
+    resultado, reached, failed = clasificar(res)
+    cfg = orch.calendario or {}
+    fecha = calendario.ahora_lima()
+    hasta = calendario.sumar_dias_habiles(date.fromisoformat(fecha[:10]), (cfg.get("observacion") or {}).get("fallo_despliegue_dias_habiles", 3),
+                                          cfg.get("feriados", []))
+    intento = int(orch._estado(req_id).get("intentos_despliegue", 0)) + 1
+    ev = {"event": "deployment", "req_id": req_id, "deployment_id": f"DEP-{req_id}", "intento": intento, "release": rel["id"],
+          "version": rel["version"], "sha": sha, "run": res.get("url"), "conclusion": res.get("conclusion"), "resultado": resultado,
+          "alcanzo_deploy": reached, "fallido": failed, "fecha": fecha, "observacion_hasta": hasta.isoformat(), "jobs": res.get("jobs"),
           "adaptaciones": ctx.get("_adaptaciones_deploy", {})}
     orch.tel.emit(**{k: v for k, v in ev.items() if k != "event"}, event="deployment")
     (out / "deployment.json").write_text(json.dumps({**ev, "ts": _now()}, ensure_ascii=False, indent=1), encoding="utf-8")
-    if reached and not failed:
-        orch._estado(req_id, estado="desplegado", fin=_now())
+    with (out / "despliegues.jsonl").open("a", encoding="utf-8") as fh:
+        fh.write(json.dumps({k: ev[k] for k in ("deployment_id", "intento", "resultado", "fecha", "observacion_hasta", "run", "sha")}, ensure_ascii=False) + "\n")
+    if resultado == "ok":
+        orch._estado(req_id, estado="desplegado", fin=_now(), deploy_ok_staging=fecha, deployment_id=f"DEP-{req_id}", intentos_despliegue=intento)
+        orch.tel.emit(event="marca_tiempo", req_id=req_id, marca="deploy_ok_staging", valor=fecha)
     else:
-        orch._estado(req_id, estado="despliegue_fallido" if reached else "pipeline_fallido", ultimo_intento=_now())
+        orch._estado(req_id, estado="despliegue_fallido" if reached else "pipeline_fallido", ultimo_intento=_now(), intentos_despliegue=intento,
+                     deployment_id=f"DEP-{req_id}")

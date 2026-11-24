@@ -241,6 +241,8 @@ flowchart LR
 
 **D-E2 (23/11/2026):** en el bucle de calidad, la devolución del Tech Lead acompaña al backend en todos los ciclos de remediación. `qa_suite` solo se aprueba por riesgo bajo si todas las pruebas pasan y cada prueba llama a un endpoint (regla F5 `calls_service`); en otro caso queda pendiente para el QA Lead, que puede aprobarla o devolverla. La aprobación automática de `backend_code` queda marcada `sujeto_a: bucle_calidad`, porque la decide la puerta `code_review`.
 
+**D-E3 (23/11/2026):** el marco del servicio (lo genera el sistema, no el modelo) convierte cada `HTTPException` en una respuesta `application/problem+json` con `type`, `title`, `status`, `detail` y `correlation_id`, tomando `type` y `title` del catálogo `errores` del diseño de API (por id, p. ej. `detail='ERR-101'`, o por status). También expone `timezone` para comparar fechas. Las devoluciones de `backend_code` siguen vigentes en todos los ciclos del bucle de calidad, y las aprobaciones automáticas de `qa_suite` se reevalúan al cerrar el bucle.
+
 Los modelos se sirven con **vLLM** (multi-LoRA y salida restringida por JSON Schema). El modelo es un recurso inyectado por configuración: cambiar de proveedor es editar `config/providers.yaml`.
 
 ### 2.3 Proveedor `prueba_offline` (antes `mock`): pruebas del software sin modelo

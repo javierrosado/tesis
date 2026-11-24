@@ -71,6 +71,16 @@ def signatures(api_design: dict) -> dict[str, str]:
     return sig
 
 
+def _catalogo_errores(api_design: dict) -> dict:
+    """Catálogo de errores del diseño de API, indexado por id (ERR-101) y por status (el primero de cada status)."""
+    cat: dict = {}
+    for e in api_design.get("errores", []):
+        item = {"type": e.get("type", "about:blank"), "title": e.get("title", ""), "status": e.get("status")}
+        cat[e["id"]] = item
+        cat.setdefault(str(e.get("status")), item)
+    return cat
+
+
 def render_app(api_design: dict, data_model: dict, backend: dict) -> dict[str, str]:
     handlers = {h["endpoint"]: h["lineas"] for h in backend.get("handlers", [])}
     seeds = {s["tabla"]: s["filas"] for s in backend.get("semillas", [])}
@@ -79,11 +89,13 @@ def render_app(api_design: dict, data_model: dict, backend: dict) -> dict[str, s
     for t, rows in seeds.items():
         db.setdefault(t, rows)
     out = ['"""Servicio generado por el pipeline multiagente (tesis UNI). No editar a mano."""',
-           "from datetime import date, datetime, timedelta  # noqa: F401",
+           "from datetime import date, datetime, timedelta, timezone  # noqa: F401",
            "from typing import Any, Optional  # noqa: F401",
-           "from fastapi import Body, FastAPI, Header, HTTPException, Query, Response  # noqa: F401", "",
+           "from fastapi import Body, FastAPI, Header, HTTPException, Query, Request, Response  # noqa: F401",
+           "",
            f'app = FastAPI(title={json.dumps(api_design.get("titulo_api", "API"), ensure_ascii=False)}, version={json.dumps(api_design.get("version_api", "v1"))})',
-           "import json as _json", f"DB: dict = _json.loads({json.dumps(json.dumps(db, ensure_ascii=False))})", "", ""]
+           "import json as _json", f"DB: dict = _json.loads({json.dumps(json.dumps(db, ensure_ascii=False))})", "",
+"", ""]
     for ep in api_design.get("endpoints", []):
         fn = ep["id"].replace("-", "_").lower()
         params, call = [], []
@@ -107,6 +119,15 @@ def render_app(api_design: dict, data_model: dict, backend: dict) -> dict[str, s
                 f"def {fn}({sig}):",
                 f"    result = _{fn}({', '.join(call)})",
                 "    return Response(status_code=204) if " + ("True" if status == 204 else "False") + " else result", "", ""]
+    out += ["import uuid as _uuid", "from fastapi.responses import JSONResponse",
+            # Errores RFC 9457 (problem+json) según el catálogo de errores del diseño de API: el marco lo genera el sistema (D-E3)
+            f"_ERRORES: dict = _json.loads({json.dumps(json.dumps(_catalogo_errores(api_design), ensure_ascii=False))})", "", "",
+            "@app.exception_handler(HTTPException)",
+            "def _problem(request: Request, exc: HTTPException):",
+            "    e = _ERRORES.get(str(exc.detail)) or _ERRORES.get(str(exc.status_code)) or {}",
+            "    cuerpo = {'type': e.get('type', 'about:blank'), 'title': e.get('title', str(exc.detail)), 'status': exc.status_code,",
+            "               'detail': str(exc.detail), 'correlation_id': request.headers.get('X-Correlation-Id') or str(_uuid.uuid4())}",
+            "    return JSONResponse(status_code=exc.status_code, content=cuerpo, media_type='application/problem+json')"]
     return {"app/__init__.py": "", "app/main.py": "\n".join(out) + "\n"}
 
 

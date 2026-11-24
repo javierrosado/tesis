@@ -160,6 +160,8 @@ def test_devolucion_de_codigo_vigente_en_todos_los_ciclos(monkeypatch):
     monkeypatch.setattr(orch, "_save", lambda ctx, art, out, meta: guardado.__setitem__(art, (out, meta)))
     monkeypatch.setattr(orch, "_human_decision", lambda *a: h)
     monkeypatch.setattr(orch, "_registrar_devolucion", lambda *a: [h])
+    hb = {"motivo": "comparar fechas con zona horaria", "ts": "2026-11-24T00:30:00+00:00"}
+    monkeypatch.setattr(orch, "_devoluciones", lambda req, art: [hb] if art == "backend_code" else [])
     monkeypatch.setattr(orch, "_special_payload", lambda *a: {})
     monkeypatch.setattr(orch, "_backend_payload", lambda *a: {})
     llamadas = []
@@ -180,4 +182,24 @@ def test_devolucion_de_codigo_vigente_en_todos_los_ciclos(monkeypatch):
     back = [fb for n, fb in llamadas if n == "backend-developer-agent"]
     assert len(back) == 3                                                  # ciclo 0 (devolución) + 2 ciclos automáticos
     assert all(any("usar exactamente estos pedidos" in f["detalle"] for f in fb) for fb in back)
+    assert all(any("comparar fechas con zona horaria" in f["detalle"] for f in fb) for fb in back)   # D-E3: también las del backend
     assert guardado["qa_suite"][1]["gate"]["decision"] == "pending"          # 3 pruebas fallidas: no se aprueba por riesgo bajo
+
+
+def test_errores_en_problem_json():
+    """D-E3: el marco del servicio responde los errores en problem+json con el catálogo del diseño de API."""
+    from fastapi.testclient import TestClient
+    import importlib.util, tempfile
+    api = {"titulo_api": "X", "version_api": "v1", "errores": [{"id": "ERR-101", "status": 404, "title": "Recurso no encontrado", "type": "https://e/x"}],
+           "endpoints": [{"id": "EP-001", "metodo": "GET", "ruta": "/v1/x/{xId}", "resumen": "x", "parametros": [{"nombre": "xId", "en": "path", "requerido": True, "tipo": "string"}],
+                          "respuestas": [{"status": 200}]}]}
+    back = {"handlers": [{"endpoint": "EP-001", "lineas": ["if xId != 'A':", "    raise HTTPException(status_code=404, detail='ERR-101')",
+                                                           "return {'ok': datetime.now(timezone.utc).year > 2000}"]}], "semillas": []}
+    files = sandbox.render_app(api, {"tablas": []}, back)
+    d = Path(tempfile.mkdtemp()); (d / "main.py").write_text(files["app/main.py"], encoding="utf-8")
+    spec = importlib.util.spec_from_file_location("m_pj", d / "main.py"); m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+    c = TestClient(m.app)
+    assert c.get("/v1/x/A").json() == {"ok": True}
+    r = c.get("/v1/x/B", headers={"X-Correlation-Id": "c-1"})
+    assert r.status_code == 404 and r.headers["content-type"].startswith("application/problem+json")
+    assert r.json() == {"type": "https://e/x", "title": "Recurso no encontrado", "status": 404, "detail": "ERR-101", "correlation_id": "c-1"}

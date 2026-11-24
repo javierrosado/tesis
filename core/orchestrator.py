@@ -173,6 +173,10 @@ class Orchestrator:
                 "motivo": a.get("motivo", ""), "ts": a["ts"], "delay_h": round((t1 - t0).total_seconds() / 3600, 2),
                 "ventana": a.get("ventana"), "dictamen_ia": (a.get("dictamen_ia") or {}).get("recomendacion"), "coincide_con_ia": a.get("coincide_con_ia")}
 
+    def _devoluciones(self, req_id: str, art: str) -> list[dict]:
+        f = self._out_dir(req_id) / "devoluciones" / f"{art}.jsonl"
+        return [json.loads(x) for x in f.read_text(encoding="utf-8").splitlines() if x.strip()] if f.exists() else []
+
     def _registrar_devolucion(self, req_id: str, art: str, h: dict) -> list[dict]:
         """Acumula las devoluciones humanas de un artefacto (output/devoluciones/<art>.jsonl) y devuelve el historial completo."""
         d = self._out_dir(req_id) / "devoluciones"; d.mkdir(exist_ok=True); f = d / f"{art}.jsonl"
@@ -327,6 +331,7 @@ class Orchestrator:
         req_id = ctx["req_id"]
         saved = self._load(req_id, "code_review")
         humanos: list[dict] = []
+        devuelto_cr = False
         ctx.pop("_qa_pendiente", None)
         if saved and saved[1].get("gate", {}).get("decision") in ("approved", "pending"):
             self.run_agent("qa-automation-agent", self._special_payload("qa-automation-agent", ctx), ctx, defer_gate=True)
@@ -343,9 +348,13 @@ class Orchestrator:
                 meta["gate"] = h; self._save(ctx, "code_review", out, meta)
                 return out
             previos = self._registrar_devolucion(req_id, "code_review", h)
+            devuelto_cr = True
             humanos = [{"severidad": "mayor", "regla": "gate_humano", "detalle": f"Tech Lead devolvió el código ({p['ts']}): {p['motivo']}", "ubicacion": "handlers"}
                        for p in previos]
-        if humanos:
+        # D-E3: las devoluciones humanas del propio backend_code también siguen vigentes en los ciclos de remediación
+        humanos += [{"severidad": "mayor", "regla": "gate_humano", "detalle": f"Tech Lead devolvió el código ({p.get('ts')}): {p.get('motivo')}", "ubicacion": "handlers"}
+                    for p in self._devoluciones(req_id, "backend_code")]
+        if devuelto_cr:
             self.tel.emit(event="remediation", req_id=req_id, ciclo=0, motivo="gate_humano", devoluciones=len(humanos))
             self.run_agent("backend-developer-agent", self._backend_payload(ctx), ctx, feedback0=humanos, force=True)
         for cycle in range(max_cycles + 1):
@@ -381,7 +390,9 @@ class Orchestrator:
     def _gate_qa_suite(self, ctx: dict, q: dict) -> None:
         """Puerta de qa_suite al cerrar el bucle: aprobación automática solo con todas las pruebas en verde y llamando al servicio."""
         saved = self._load(ctx["req_id"], "qa_suite")
-        if not saved or saved[1].get("gate", {}).get("decision") not in ("deferred", None):
+        g = saved[1].get("gate", {}) if saved else {}
+        # se evalúa al cerrar el bucle; también se reevalúa una aprobación automática anterior (no una decisión humana)
+        if not saved or not (g.get("decision") in ("deferred", None) or g.get("by") == "politica_riesgo_bajo"):
             return
         out, meta = saved
         agent = self.reg.agents["qa-automation-agent"]

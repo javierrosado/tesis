@@ -203,3 +203,19 @@ def test_errores_en_problem_json():
     r = c.get("/v1/x/B", headers={"X-Correlation-Id": "c-1"})
     assert r.status_code == 404 and r.headers["content-type"].startswith("application/problem+json")
     assert r.json() == {"type": "https://e/x", "title": "Recurso no encontrado", "status": 404, "detail": "ERR-101", "correlation_id": "c-1"}
+
+
+def test_vllm_cede_salida_si_la_entrada_es_larga(monkeypatch):
+    """D-E5: si la entrada más max_tokens supera el contexto del vLLM, se reintenta con 4096 tokens de salida."""
+    import io, urllib.error
+    from core.adapters.openai_compat import OpenAICompatAdapter
+    a = OpenAICompatAdapter({"model": "m", "max_new_tokens": 10240})
+    vistos = []
+
+    def post(body):
+        vistos.append(body["max_tokens"])
+        if body["max_tokens"] > 4096:
+            raise urllib.error.HTTPError("u", 400, "bad", {}, io.BytesIO(b"This model's maximum context length is 28000 tokens"))
+        return {"choices": [{"message": {"content": "{}"}}], "usage": {}}
+    monkeypatch.setattr(a, "_post", post)
+    assert a.complete([{"role": "user", "content": "x"}]).text == "{}" and vistos == [10240, 4096]

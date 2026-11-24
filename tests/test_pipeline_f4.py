@@ -219,3 +219,11 @@ def test_vllm_cede_salida_si_la_entrada_es_larga(monkeypatch):
         return {"choices": [{"message": {"content": "{}"}}], "usage": {}}
     monkeypatch.setattr(a, "_post", post)
     assert a.complete([{"role": "user", "content": "x"}]).text == "{}" and vistos == [10240, 4096]
+
+
+def test_suite_con_marcas_pytest_sin_import():
+    """D-E6: una suite que usa @pytest.mark.xfail sin importar pytest se ejecuta igual (el sistema agrega el import)."""
+    from core.tools.sandbox import _con_import_pytest
+    t = _con_import_pytest(["@pytest.mark.xfail(reason='x')", "def test_a(client):", "    assert False"])
+    assert t.startswith("import pytest")
+    assert not _con_import_pytest(["import pytest", "def test_a(client):", "    assert True"]).startswith("import pytest  # noqa")

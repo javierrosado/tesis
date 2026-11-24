@@ -61,7 +61,7 @@
        "type": "object"
       },
       "minItems": 1,
-      "maxItems": 5
+      "maxItems": 10
      }
     },
     "additionalProperties": false

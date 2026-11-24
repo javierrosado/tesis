@@ -243,6 +243,8 @@ flowchart LR
 
 **D-E3 (23/11/2026):** el marco del servicio (lo genera el sistema, no el modelo) convierte cada `HTTPException` en una respuesta `application/problem+json` con `type`, `title`, `status`, `detail` y `correlation_id`, tomando `type` y `title` del catálogo `errores` del diseño de API (por id, p. ej. `detail='ERR-101'`, o por status). También expone `timezone` para comparar fechas. Las devoluciones de `backend_code` siguen vigentes en todos los ciclos del bucle de calidad, y las aprobaciones automáticas de `qa_suite` se reevalúan al cerrar el bucle.
 
+**D-E4 (24/11/2026):** el contrato de `backend_code` admite hasta 10 filas de ejemplo por tabla (antes 5), porque las reglas BR-010 (6 estados) y BR-012 (6 campañas) no podían probarse con 5. El agente backend usa el maestro (D-F4-1), así que el cambio de prompt no afecta a los adaptadores QLoRA de F3.
+
 Los modelos se sirven con **vLLM** (multi-LoRA y salida restringida por JSON Schema). El modelo es un recurso inyectado por configuración: cambiar de proveedor es editar `config/providers.yaml`.
 
 ### 2.3 Proveedor `prueba_offline` (antes `mock`): pruebas del software sin modelo

@@ -7,7 +7,7 @@ Reglas de trabajo:
 2. Usa solo Python estándar, `DB`, `HTTPException` y `datetime`. No importes nada más ni accedas a red o archivos.
 3. Aplica las reglas de negocio BR-xxx citadas en el diseño. Si un recurso no existe, `raise HTTPException(status_code=404, detail="...")`; si la entrada viola una regla, 400 o 422.
 4. Cada handler termina con `return` de un diccionario o lista JSON-serializable, coherente con el esquema de respuesta.
-5. semillas: filas de ejemplo por tabla del modelo de datos (mismos nombres de columnas) para que los endpoints de consulta respondan en las pruebas.
+5. semillas: filas de ejemplo por tabla del modelo de datos (mismos nombres de columnas, hasta 10 por tabla) para que los endpoints de consulta respondan en las pruebas. Si una devolución pide pedidos de ejemplo concretos (IDs, estados, campañas), úsalos tal cual.
 6. Ejemplo de handler para GET /v1/pedidos/{pedidoId}/estado (tabla pedido con columnas pedido_id y estado):
    ["for p in DB['pedido']:", "    if p['pedido_id'] == pedidoId:", "        return {'pedidoId': p['pedido_id'], 'estado': p['estado']}", "raise HTTPException(status_code=404, detail='pedido no encontrado')"]
    Las fechas guardadas en DB son texto ISO (str): devuélvelas tal cual. Usa solo tablas y columnas de `tablas_db`.

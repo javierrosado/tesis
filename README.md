@@ -239,6 +239,8 @@ flowchart LR
 
 **D-E1 (23/11/2026):** cuando el autor devuelve un artefacto en un gate, la corrección la genera el maestro `Qwen/Qwen3-32B-AWQ`; la primera versión sigue siendo del agente de la tabla. La telemetría registra cada corrección (`correccion_humana`).
 
+**D-E2 (23/11/2026):** en el bucle de calidad, la devolución del Tech Lead acompaña al backend en todos los ciclos de remediación. `qa_suite` solo se aprueba por riesgo bajo si todas las pruebas pasan y cada prueba llama a un endpoint (regla F5 `calls_service`); en otro caso queda pendiente para el QA Lead, que puede aprobarla o devolverla. La aprobación automática de `backend_code` queda marcada `sujeto_a: bucle_calidad`, porque la decide la puerta `code_review`.
+
 Los modelos se sirven con **vLLM** (multi-LoRA y salida restringida por JSON Schema). El modelo es un recurso inyectado por configuración: cambiar de proveedor es editar `config/providers.yaml`.
 
 ### 2.3 Proveedor `prueba_offline` (antes `mock`): pruebas del software sin modelo

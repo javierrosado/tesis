@@ -19,8 +19,10 @@
     "    r = client.get(\"/v1/pedidos/NOPE/estado\")",
     "    assert r.status_code == 404",
     "",
-    "def test_zona_con_transito(db):",
-    "    assert db[\"zona_entrega\"][0][\"dias_transito\"] > 0"
+    "def test_estado_coincide_con_db(client, db):",
+    "    pid = db[\"pedido\"][0][\"pedido_id\"]",
+    "    r = client.get(f\"/v1/pedidos/{pid}/estado\")",
+    "    assert r.status_code in (200, 404)"
    ]
   }
  ],

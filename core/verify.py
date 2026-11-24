@@ -233,7 +233,33 @@ def metrics_qa(out: dict, ctx: dict) -> dict:
     got = {c for s in out.get("suites", []) for c in s.get("casos", [])}
     rt = run_tests(app_files(ctx), out)
     propios = [f for f in rt["fallos"] if QA_OWN_ERROR.search(f["detalle"])]   # la prueba falla por su propio código, no por el servicio
-    return {"tc_coverage": (len(tcs & got) / len(tcs)) if tcs else 1.0, "suite_runs": rt["suite_runs"] and rt["errors"] == 0 and not propios, "pass_rate": rt["pass_rate"]}
+    total = len(funciones_de_prueba(out))
+    return {"tc_coverage": (len(tcs & got) / len(tcs)) if tcs else 1.0, "suite_runs": rt["suite_runs"] and rt["errors"] == 0 and not propios, "pass_rate": rt["pass_rate"],
+            "calls_service": (1 - len(pruebas_sin_servicio(out)) / total) if total else 1.0}
+
+
+TEST_DEF = re.compile(r"^(?:async\s+)?def\s+(test_\w+)\s*\(")
+
+
+def funciones_de_prueba(qa_suite: dict) -> dict[str, str]:
+    """{suite::prueba: cuerpo} de cada función test_* de la suite."""
+    res: dict[str, str] = {}
+    for s in qa_suite.get("suites", []):
+        actual, cuerpo = None, []
+        for l in s.get("lineas", []) + ["def _fin_():"]:
+            m = TEST_DEF.match(l)
+            if m or (l.startswith("def ") or l.startswith("@") or l.startswith("class ")):
+                if actual:
+                    res[f'{s["id"]}::{actual}'] = "\n".join(cuerpo)
+                actual, cuerpo = (m.group(1) if m else None), []
+            elif actual:
+                cuerpo.append(l)
+    return res
+
+
+def pruebas_sin_servicio(qa_suite: dict) -> list[str]:
+    """Pruebas que no llaman a ningún endpoint (client.<verbo>): pasan siempre y no verifican el servicio (pruebas tautológicas)."""
+    return [k for k, b in funciones_de_prueba(qa_suite).items() if not re.search(r"\bclient\.(get|post|put|patch|delete|request)\(", b)]
 
 
 USES_REPO = re.compile(r"pytest|\./|requirements|deploy|uvicorn|python ")
@@ -254,7 +280,8 @@ def quality_facts(ctx: dict) -> dict:
     files = app_files(ctx)
     rt = run_tests(files, ctx.get("qa_suite", {})) if ctx.get("qa_suite") else {"failed": 0, "errors": 0, "collected": 0}
     crit = [h for h in ctx.get("code_review", {}).get("hallazgos", []) if h["severidad"] == "critico" and in_handlers(files, h["archivo"], h["linea"])]
-    return {"pruebas_fallidas": rt.get("failed", 0) + rt.get("errors", 0), "pruebas_total": rt.get("collected", 0), "criticos": len(crit)}
+    return {"pruebas_fallidas": rt.get("failed", 0) + rt.get("errors", 0), "pruebas_total": rt.get("collected", 0), "criticos": len(crit),
+            "pruebas_sin_servicio": len(pruebas_sin_servicio(ctx.get("qa_suite", {})))}
 
 
 def metrics_code_review(out: dict, ctx: dict) -> dict:

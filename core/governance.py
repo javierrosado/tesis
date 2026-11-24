@@ -128,6 +128,10 @@ def _f5_detail(agent_name: str, key: str, out: dict, ctx: dict, res: dict) -> tu
         errs = [f["prueba"] + ": " + f["detalle"][:160] for f in rt["fallos"] if "setup" in f["detalle"] or verify.QA_OWN_ERROR.search(f["detalle"]) or f["prueba"] == "<colección>"][:4]
         return (f"Las suites tienen errores propios (módulos inexistentes, fixtures inexistentes, nombres no definidos, sintaxis), no fallos del servicio. "
                 f"El servicio solo expone su API HTTP en app.main: prueba todo (también los casos unitarios) llamando a los endpoints con client, y usa solo los fixtures client y db: {'; '.join(errs)}"), "suites[].lineas"
+    if agent_name == "qa-automation-agent" and key == "calls_service":
+        malas = verify.pruebas_sin_servicio(out)[:6]
+        return (f"Estas pruebas no llaman al servicio y pasan siempre (solo comparan datos armados dentro de la propia prueba): {', '.join(malas)}. "
+                "Cada prueba debe llamar a un endpoint con client y verificar la respuesta (status y cuerpo)"), "suites[].lineas"
     if agent_name == "code-review-agent" and key == "bandit_covered":
         from .tools.sandbox import static_analysis
         sa = static_analysis(verify.app_files(ctx))

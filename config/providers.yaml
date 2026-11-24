@@ -55,7 +55,7 @@ providers:
     adapter: openai_compat
     model: Qwen/Qwen3-32B-AWQ
     url: http://localhost:8001/v1
-    max_new_tokens: 6144
+    max_new_tokens: 10240          # D-E5: el backend con hasta 10 filas por tabla superaba 6144 (ensayo1 r14)
     temperature: 0.2
     chat_template_kwargs: {enable_thinking: false}
 

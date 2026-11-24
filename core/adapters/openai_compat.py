@@ -57,6 +57,13 @@ class OpenAICompatAdapter:
         except urllib.error.HTTPError as e:
             detail = e.read().decode("utf-8", "ignore")[:500]
             print(f"[openai_compat] HTTP {e.code}: {detail}", file=sys.stderr, flush=True)
+            if e.code == 400 and "context length" in detail.lower() and self.max_tokens > 4096:
+                body["max_tokens"] = 4096       # D-E5: entrada larga; se cede salida antes que fallar (queda en el log)
+                r = self._post(body)
+                u = r.get("usage", {})
+                return ModelResponse(text=r["choices"][0]["message"]["content"], model_id=self.model, provider=self.name,
+                                     tokens_in=u.get("prompt_tokens", 0), tokens_out=u.get("completion_tokens", 0),
+                                     latency_ms=int((time.time() - t0) * 1000))
             if e.code != 400 or not schema:
                 raise
             body["response_format"]["json_schema"]["schema"] = _grammar_safe(schema, drop_patterns=True)   # reintento sin regex

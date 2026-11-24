@@ -245,6 +245,8 @@ flowchart LR
 
 **D-E4 (24/11/2026):** el contrato de `backend_code` admite hasta 10 filas de ejemplo por tabla (antes 5), porque las reglas BR-010 (6 estados) y BR-012 (6 campañas) no podían probarse con 5. El agente backend usa el maestro (D-F4-1), así que el cambio de prompt no afecta a los adaptadores QLoRA de F3.
 
+**D-E5 (24/11/2026):** el maestro (`vllm_teacher`) genera hasta 10 240 tokens de salida (antes 6144). Si la entrada más la salida superan el contexto de 28 000 tokens del vLLM, el adaptador reintenta con 4096 y lo deja en el log. El backend genera filas de ejemplo solo para las tablas que leen los endpoints.
+
 Los modelos se sirven con **vLLM** (multi-LoRA y salida restringida por JSON Schema). El modelo es un recurso inyectado por configuración: cambiar de proveedor es editar `config/providers.yaml`.
 
 ### 2.3 Proveedor `prueba_offline` (antes `mock`): pruebas del software sin modelo

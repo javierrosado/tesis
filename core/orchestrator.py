@@ -133,17 +133,20 @@ class Orchestrator:
             r = "alto" if any(c.get("pii") for t in out.get("tablas", []) for c in t.get("columnas", [])) else "bajo"
         return r
 
-    def _gate(self, producer, verdict: dict, ctx: dict, out: dict) -> dict:
+    def _gate(self, producer, verdict: dict, ctx: dict, out: dict, forzar_humano: str | None = None) -> dict:
         g = producer.gate
         role = self.reg.gates["roles"][g["role"]]
         art = g["artefact"]
         if self.reg.gates.get("mode", "auto") == "manual":
-            risk = self._risk(art, out)
+            risk = "alto" if forzar_humano else self._risk(art, out)
             if risk == "bajo":
                 decision = {"decision": "approved", "role": g["role"], "by": "politica_riesgo_bajo", "riesgo": "bajo", "delay_h": 0.0, "ts": _now()}
+                if art == "backend_code":
+                    decision["sujeto_a"] = "bucle_calidad"      # las pruebas y la revisión de código deciden después (puerta code_review)
             else:
                 req = {"artefacto": art, "rol": g["role"], "hash": _hash(out), "solicitado": _now(), "agente": producer.name,
-                       "hallazgos_governance": verdict["hallazgos"]}
+                       "hallazgos_governance": verdict["hallazgos"] + ([{"severidad": "mayor", "regla": "calidad_pruebas", "detalle": forzar_humano,
+                                                                          "ubicacion": "suites"}] if forzar_humano else [])}
                 pend = self._out_dir(ctx["req_id"]) / "pendientes"; pend.mkdir(exist_ok=True)
                 (pend / f"{art}.json").write_text(json.dumps(req, ensure_ascii=False, indent=1), encoding="utf-8")
                 decision = {"decision": "pending", "role": g["role"], "by": "human", "riesgo": "alto", "hash": req["hash"], "solicitado": req["solicitado"]}
@@ -317,11 +320,16 @@ class Orchestrator:
 
     # ---------- bucle de calidad: pruebas reales + revisión + remediación del backend ----------
     def quality_loop(self, ctx: dict, stage_art: dict, max_cycles: int = 2) -> dict:
+        """Bucle de calidad: pruebas reales + revisión + remediación del backend.
+        Protocolo F5 v2.1 (ensayo1, ronda 11): (a) las devoluciones humanas de code_review siguen vigentes en TODOS los ciclos
+        de remediación, no solo en el primero; (b) qa_suite no se aprueba por riesgo bajo si hay pruebas fallidas o pruebas que no
+        llaman al servicio: queda para el QA Lead, que puede devolverla; (c) backend_code queda sujeto a esta revisión."""
         req_id = ctx["req_id"]
         saved = self._load(req_id, "code_review")
-        pre_fb = None
+        humanos: list[dict] = []
+        ctx.pop("_qa_pendiente", None)
         if saved and saved[1].get("gate", {}).get("decision") in ("approved", "pending"):
-            self.run_agent("qa-automation-agent", None, ctx)
+            self.run_agent("qa-automation-agent", self._special_payload("qa-automation-agent", ctx), ctx, defer_gate=True)
             out, meta = saved
             if meta["gate"]["decision"] == "approved":
                 ctx["code_review"] = out
@@ -334,12 +342,14 @@ class Orchestrator:
             if h["decision"] == "approved":
                 meta["gate"] = h; self._save(ctx, "code_review", out, meta)
                 return out
-            pre_fb = [{"severidad": "mayor", "regla": "gate_humano", "detalle": f"Tech Lead devolvió el código: {h['motivo']}", "ubicacion": "handlers"}]
-        if pre_fb:
-            self.tel.emit(event="remediation", req_id=req_id, ciclo=0, motivo="gate_humano")
-            self.run_agent("backend-developer-agent", self._backend_payload(ctx), ctx, feedback0=pre_fb, force=True)
+            previos = self._registrar_devolucion(req_id, "code_review", h)
+            humanos = [{"severidad": "mayor", "regla": "gate_humano", "detalle": f"Tech Lead devolvió el código ({p['ts']}): {p['motivo']}", "ubicacion": "handlers"}
+                       for p in previos]
+        if humanos:
+            self.tel.emit(event="remediation", req_id=req_id, ciclo=0, motivo="gate_humano", devoluciones=len(humanos))
+            self.run_agent("backend-developer-agent", self._backend_payload(ctx), ctx, feedback0=humanos, force=True)
         for cycle in range(max_cycles + 1):
-            self.run_agent("qa-automation-agent", self._special_payload("qa-automation-agent", ctx), ctx)
+            self.run_agent("qa-automation-agent", self._special_payload("qa-automation-agent", ctx), ctx, defer_gate=True)
             review = self.run_agent("code-review-agent", self._special_payload("code-review-agent", ctx), ctx, force=True, defer_gate=True)
             q = verify.quality_facts(ctx)
             from . import calendario
@@ -354,17 +364,33 @@ class Orchestrator:
                 break
             from .tools import sandbox
             rt = sandbox.run_tests(verify.app_files(ctx), ctx["qa_suite"])
-            fb = [{"severidad": "mayor", "regla": "prueba_fallida", "detalle": f["prueba"] + ": " + f["detalle"], "ubicacion": "handlers"} for f in rt["fallos"][:10]] + \
+            fb = humanos + \
+                 [{"severidad": "mayor", "regla": "prueba_fallida", "detalle": f["prueba"] + ": " + f["detalle"], "ubicacion": "handlers"} for f in rt["fallos"][:10]] + \
                  [{"severidad": "mayor", "regla": h["regla"], "detalle": h["descripcion"] + " → " + h["recomendacion"], "ubicacion": f'{h["archivo"]}:{h["linea"]}'}
                   for h in review["hallazgos"] if h["severidad"] == "critico"]
-            self.tel.emit(event="remediation", req_id=req_id, ciclo=cycle + 1, fallos=q["pruebas_fallidas"], criticos=q["criticos"])
+            self.tel.emit(event="remediation", req_id=req_id, ciclo=cycle + 1, fallos=q["pruebas_fallidas"], criticos=q["criticos"], devoluciones=len(humanos))
             self.run_agent("backend-developer-agent", self._backend_payload(ctx), ctx, feedback0=fb, force=True)
+        self._gate_qa_suite(ctx, q)
         out, meta = self._load(req_id, "code_review")
         gate = self._gate(self.reg.agents["code-review-agent"], meta["verdict"], ctx, out)
         meta["gate"] = gate; self._save(ctx, "code_review", out, meta)
-        if gate["decision"] == "pending":
+        if gate["decision"] == "pending" or ctx.get("_qa_pendiente"):
             raise PendingApproval(f"{req_id}/code_review")
         return out
+
+    def _gate_qa_suite(self, ctx: dict, q: dict) -> None:
+        """Puerta de qa_suite al cerrar el bucle: aprobación automática solo con todas las pruebas en verde y llamando al servicio."""
+        saved = self._load(ctx["req_id"], "qa_suite")
+        if not saved or saved[1].get("gate", {}).get("decision") not in ("deferred", None):
+            return
+        out, meta = saved
+        agent = self.reg.agents["qa-automation-agent"]
+        if q["pruebas_fallidas"] == 0 and q.get("pruebas_sin_servicio", 0) == 0:
+            gate = self._gate(agent, meta["verdict"], ctx, out)
+        else:
+            gate = self._gate(agent, meta["verdict"], ctx, out, forzar_humano=f'{q["pruebas_fallidas"]} pruebas fallidas, {q.get("pruebas_sin_servicio", 0)} sin llamar al servicio')
+        meta["gate"] = gate; self._save(ctx, "qa_suite", out, meta)
+        ctx["_qa_pendiente"] = gate["decision"] == "pending"
 
     # ---------- DAG ----------
     def _payload(self, node: dict, ctx: dict, stage_art: dict):

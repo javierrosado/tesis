@@ -135,3 +135,49 @@ def test_correccion_humana_la_hace_el_maestro(monkeypatch):
     orch._port(REG.agents["product-analyst-agent"], correccion=False)      # la primera versión sigue con su LoRA
     monkeypatch.setenv("PIPELINE_PROVIDER", "prueba_offline")
     assert REG.correccion_provider("product-analyst-agent") is None
+
+
+def test_pruebas_sin_servicio_detectadas():
+    """ensayo1 r10: una prueba que no llama a un endpoint pasa siempre y no verifica el servicio."""
+    qa = {"suites": [{"id": "SA-001", "lineas": ["import pytest", "", "def test_ok(client, db):", "    r = client.get('/v1/x')", "    assert r.status_code == 200", "",
+                                                 "def test_tautologica(db):", "    nota = {'a': 1}", "    assert nota['a'] == 1"]}]}
+    assert verify.pruebas_sin_servicio(qa) == ["SA-001::test_tautologica"]
+    assert set(verify.funciones_de_prueba(qa)) == {"SA-001::test_ok", "SA-001::test_tautologica"}
+
+
+def test_devolucion_de_codigo_vigente_en_todos_los_ciclos(monkeypatch):
+    """ensayo1 r11: el motivo del Tech Lead llega al backend en el ciclo 0 y también en los ciclos automáticos de remediación;
+    con pruebas fallidas, qa_suite no se aprueba por riesgo bajo (queda para el QA Lead)."""
+    import pytest
+    from core.orchestrator import PendingApproval
+    monkeypatch.setenv("GATES_MODE", "manual")
+    orch = Orchestrator(ROOT, Telemetry(ROOT / "telemetry" / "tmp_bucle.jsonl"), seed=1, today="2026-11-24")
+    h = {"decision": "returned", "role": "tech_lead", "motivo": "usar exactamente estos pedidos de ejemplo", "ts": "2026-11-24T01:00:00+00:00"}
+    guardado = {"code_review": ({"veredicto": "cambios_requeridos", "hallazgos": []}, {"gate": {"decision": "pending", "role": "tech_lead", "hash": "x", "solicitado": h["ts"]},
+                                                                                    "verdict": {"hallazgos": []}}),
+                "qa_suite": ({"suites": []}, {"gate": {"decision": "deferred"}, "verdict": {"hallazgos": []}})}
+    monkeypatch.setattr(orch, "_load", lambda req, art: guardado.get(art))
+    monkeypatch.setattr(orch, "_save", lambda ctx, art, out, meta: guardado.__setitem__(art, (out, meta)))
+    monkeypatch.setattr(orch, "_human_decision", lambda *a: h)
+    monkeypatch.setattr(orch, "_registrar_devolucion", lambda *a: [h])
+    monkeypatch.setattr(orch, "_special_payload", lambda *a: {})
+    monkeypatch.setattr(orch, "_backend_payload", lambda *a: {})
+    llamadas = []
+
+    def run_agent(name, payload, ctx, feedback0=None, force=False, defer_gate=False):
+        llamadas.append((name, feedback0))
+        if name == "code-review-agent":
+            ctx["code_review"] = {"veredicto": "cambios_requeridos", "hallazgos": []}
+            return ctx["code_review"]
+        ctx.setdefault("qa_suite", {"suites": []})
+        return {}
+    monkeypatch.setattr(orch, "run_agent", run_agent)
+    monkeypatch.setattr(verify, "quality_facts", lambda ctx: {"pruebas_fallidas": 3, "pruebas_total": 5, "criticos": 0, "pruebas_sin_servicio": 0})
+    monkeypatch.setattr(sandbox, "run_tests", lambda *a: {"fallos": [{"prueba": "t1", "detalle": "assert 1 == 2"}]})
+    monkeypatch.setattr(verify, "app_files", lambda *a, **k: {})
+    with pytest.raises(PendingApproval):
+        orch.quality_loop({"req_id": "SIM-P05-R001"}, {}, max_cycles=2)
+    back = [fb for n, fb in llamadas if n == "backend-developer-agent"]
+    assert len(back) == 3                                                  # ciclo 0 (devolución) + 2 ciclos automáticos
+    assert all(any("usar exactamente estos pedidos" in f["detalle"] for f in fb) for fb in back)
+    assert guardado["qa_suite"][1]["gate"]["decision"] == "pending"          # 3 pruebas fallidas: no se aprueba por riesgo bajo

@@ -71,6 +71,13 @@ def signatures(api_design: dict) -> dict[str, str]:
     return sig
 
 
+def _con_import_pytest(lineas: list[str]) -> str:
+    texto = "\n".join(lineas) + "\n"
+    if "pytest." in texto and not any(l.strip() in ("import pytest",) or l.startswith("import pytest") for l in lineas):
+        texto = "import pytest  # noqa: F401  (agregado por el sistema, D-E6)\n" + texto
+    return texto
+
+
 def _catalogo_errores(api_design: dict) -> dict:
     """Catálogo de errores del diseño de API, indexado por id (ERR-101) y por status (el primero de cada status)."""
     cat: dict = {}
@@ -222,7 +229,8 @@ def run_tests(files: dict[str, str], qa_suite: dict) -> dict:
     k = _key("tests", files, qa_suite)
     if k in _CACHE:
         return _CACHE[k]
-    tests = {f"tests/test_{s['id'].replace('-', '_').lower()}.py": "\n".join(s["lineas"]) + "\n" for s in qa_suite.get("suites", [])}
+    # D-E6: el sistema agrega `import pytest` (marcas xfail/parametrize) si la suite no lo importa; no altera las pruebas
+    tests = {f"tests/test_{s['id'].replace('-', '_').lower()}.py": _con_import_pytest(s["lineas"]) for s in qa_suite.get("suites", [])}
     d = _workdir({**files, **tests, "tests/conftest.py": _CONFTEST, "tests/__init__.py": ""})
     p = _run([sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider", "--junitxml=r.xml", "tests"], d, 180)
     res = {"returncode": p.returncode, "collected": 0, "passed": 0, "failed": 0, "errors": 0, "fallos": []}

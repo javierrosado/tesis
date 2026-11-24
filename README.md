@@ -247,6 +247,8 @@ flowchart LR
 
 **D-E5 (24/11/2026):** el maestro (`vllm_teacher`) genera hasta 10 240 tokens de salida (antes 6144). Si la entrada más la salida superan el contexto de 28 000 tokens del vLLM, el adaptador reintenta con 4096 y lo deja en el log. El backend genera filas de ejemplo solo para las tablas que leen los endpoints.
 
+**D-E6 (24/11/2026):** al montar las pruebas, el sistema antepone `import pytest` si una suite usa `pytest.` sin importarlo (no cambia ninguna prueba). Cuando una salida del modelo no es JSON válido, el evento `contract_rejected` registra `contexto` (los 400 caracteres alrededor del error) y `largo_salida`.
+
 Los modelos se sirven con **vLLM** (multi-LoRA y salida restringida por JSON Schema). El modelo es un recurso inyectado por configuración: cambiar de proveedor es editar `config/providers.yaml`.
 
 ### 2.3 Proveedor `prueba_offline` (antes `mock`): pruebas del software sin modelo

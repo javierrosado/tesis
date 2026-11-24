@@ -40,8 +40,11 @@ class ModelPort:
                 return out, {**totals, "provider": r.provider, "model_id": r.model_id}
             except (json.JSONDecodeError, jsonschema.ValidationError) as e:
                 last_err = _short(e)
+                extra = {}
+                if isinstance(e, json.JSONDecodeError):      # D-E6: fragmento de la salida alrededor del error, para diagnosticar
+                    extra = {"contexto": e.doc[max(0, e.pos - 300): e.pos + 100], "largo_salida": len(e.doc)}
                 self.telemetry.emit(event="contract_rejected", agent=agent.name, req_id=req_id, attempt=attempt,
-                                    provider=r.provider, model_id=r.model_id, error=last_err)
+                                    provider=r.provider, model_id=r.model_id, error=last_err, **extra)
                 messages = messages + [{"role": "assistant", "content": r.text[:4000]},
                                        {"role": "user", "content": f"La salida no cumple el contrato: {last_err}. "
                                                                    f"Corrige y devuelve solo el JSON completo y válido."}]

@@ -52,6 +52,21 @@ solo queda el código que los genera y este README.
    Cada variante tiene un solo defecto, con su ubicación (handler y línea) y la severidad esperada.
 5. **Revisión humana del 20 %** (6 casos, el autor): servicio, pruebas y defectos; se anotan en `revision_humana.md`.
 
+### 3.1 Resultado de la construcción (25/11/2026)
+
+| Paso | Resultado |
+|---|---|
+| Entradas congeladas | 30 casos; con entrada de backend 28 (2 sin backend en el pipeline v1) |
+| Referencias | **28/28** tras 4 corridas (MANIFEST): Claude **19**, DeepSeek V4-Pro **6**, GLM-5.3 **3** |
+| Reasignados | 5 casos que su autor no logró en 6 intentos pasaron a Claude (`reasignado: true` en `autoria.json`): SIM-E01-R026 (DeepSeek), SIM-E03-R003, SIM-E03-R008, SIM-E04-R014, SIM-E05-R010 (GLM) |
+| Defectos | 140 (3 de lógica + 2 de seguridad por caso), cada uno con su variante completa |
+| Costo | Claude USD 2,94 (medido); HF Inference Providers ≈ USD 7 en las 4 corridas |
+
+**Desviación del diseño (§3.3):** el reparto previsto era 15/15 (Claude/frontera); quedó 19/9 por las reasignaciones.
+Como Claude también es la referencia de techo del benchmark, existe riesgo de sesgo de autoría a su favor en
+backend-developer y code-review. Mitigación: el benchmark reporta esas métricas estratificadas por autor de la referencia,
+y la conclusión de N4 se toma sobre los casos con autor de frontera cuando la diferencia dependa del estrato.
+
 ## 4. Juez semántico (uso 4)
 
 Rúbrica 1–5 para solution-architect, data-model y security-compliance; kappa ponderado contra la revisión humana del 20 %

@@ -30,3 +30,26 @@ def test_contenido_vacio_reintenta_con_mas_tokens(monkeypatch):
         return {"choices": [{"message": {"content": txt}, "finish_reason": "length" if txt is None else "stop"}], "usage": {}}
     monkeypatch.setattr(ad, "_post", post)
     assert ad.complete([{"role": "user", "content": "x"}]).text == '{"ok": 1}' and vistos == [100, 200]
+
+
+def test_anthropic_cae_a_tool_choice_auto(monkeypatch):
+    """25/11: claude-opus-5-5 responde 400 a tool_choice forzado; el adaptador reintenta con auto."""
+    import sys, types
+    llamadas = []
+
+    class Msgs:
+        def create(self, **kw):
+            llamadas.append(kw["tool_choice"]["type"])
+            if kw["tool_choice"]["type"] == "tool":
+                raise RuntimeError('400 tool_choice: type "tool" and "any" are not supported for this model.')
+            b = types.SimpleNamespace(type="tool_use", input={"ok": 1})
+            return types.SimpleNamespace(content=[b], model="claude-opus-5-5", usage=types.SimpleNamespace(input_tokens=1000, output_tokens=500))
+    fake = types.SimpleNamespace(Anthropic=lambda **kw: types.SimpleNamespace(messages=Msgs()))
+    monkeypatch.setitem(sys.modules, "anthropic", fake)
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "x")
+    from core.adapters.anthropic_adapter import AnthropicAdapter
+    ad = AnthropicAdapter({"model": "claude-opus-5-5"})
+    r = ad.complete([{"role": "user", "content": "x"}], {"type": "object"})
+    assert r.text == '{"ok": 1}' and llamadas == ["tool", "auto"] and r.meta["costo_usd"] == 0.014
+    ad.complete([{"role": "user", "content": "x"}], {"type": "object"})
+    assert llamadas[-1] == "auto"

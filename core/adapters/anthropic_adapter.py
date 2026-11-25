@@ -35,7 +35,18 @@ class AnthropicAdapter:
             kwargs["tools"] = [{"name": "emit", "description": "Devuelve el artefacto estructurado.", "input_schema": _inline(schema)}]
             kwargs["tool_choice"] = {"type": "tool", "name": "emit"}
         t0 = time.time()
-        r = self.client.messages.create(**kwargs)
+        if schema and getattr(self, "_sin_tool_forzada", False):
+            kwargs["tool_choice"] = {"type": "auto"}
+            kwargs["system"] = (system + "\n\nEntrega el resultado SIEMPRE llamando a la herramienta `emit`.").strip()
+        try:
+            r = self.client.messages.create(**kwargs)
+        except Exception as e:  # noqa: BLE001 — 25/11: claude-opus-5-5 rechaza tool_choice "tool"/"any" (400)
+            if not (schema and "tool_choice" in str(e) and kwargs["tool_choice"].get("type") == "tool"):
+                raise
+            self._sin_tool_forzada = True
+            kwargs["tool_choice"] = {"type": "auto"}
+            kwargs["system"] = (system + "\n\nEntrega el resultado SIEMPRE llamando a la herramienta `emit`.").strip()
+            r = self.client.messages.create(**kwargs)
         import json
         text = next((json.dumps(b.input, ensure_ascii=False) for b in r.content if b.type == "tool_use"), "")
         if not text:

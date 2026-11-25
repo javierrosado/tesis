@@ -43,6 +43,18 @@ MODELOS = os.environ.get("MODELOS", "hf_glm53,hf_dsv4pro,hf_dsv4flash" + (",clau
 AGENTES = os.environ.get("AGENTES", "solution-architect-agent,data-model-agent,security-compliance-agent,backend-developer-agent,code-review-agent").split(",")
 src = Path(snapshot_download(RUNS, repo_type="dataset", allow_patterns=["runs/eval_n3/casos/**"])) / "runs/eval_n3/casos"
 casos = sorted(p.name for p in src.iterdir() if (p / "caso.json").exists())[: int(os.environ.get("MAX_CASOS", "999"))]
+import hashlib as _hl                                                       # noqa: E402
+# Ahorro (decisión de Javier, 25/11): Claude (techo) solo en una muestra estratificada por autor de la referencia
+_autor = {c: (json.loads((src / c / "autoria.json").read_text(encoding="utf-8")) if (src / c / "autoria.json").exists() else {}).get("autor", "?") for c in casos}
+N_CLAUDE = int(os.environ.get("CLAUDE_CASOS", "0")) or len(casos)
+_orden = sorted(casos, key=lambda c: _hl.sha256(f"techo:{c}".encode()).hexdigest())
+_cuota = {a: max(1, round(N_CLAUDE * sum(v == a for v in _autor.values()) / len(casos))) for a in set(_autor.values())}
+CASOS_CLAUDE = []
+for a, k in sorted(_cuota.items()):
+    CASOS_CLAUDE += [c for c in _orden if _autor[c] == a][:k]
+CASOS_CLAUDE = set(sorted(CASOS_CLAUDE, key=_orden.index)[:N_CLAUDE])
+# code-review: limpio + 1 mutante de lógica + los de seguridad (los de lógica no discriminaban: se ven en las pruebas)
+CR_LOGICA = int(os.environ.get("CR_LOGICA", "3"))
 tel = Telemetry(Path(f"/tmp/bench_{JOB}.jsonl"), run_id=JOB, echo=False)
 orch = Orchestrator(ROOT, tel, today="2026-11-25")
 reg = orch.reg
@@ -137,7 +149,9 @@ def evaluar(job):
         else:
             v, _, f5 = governance.review(reg.agents[agente], out, ctx, 0)
             r.update(aprobado_r0=v["veredicto"] == "aprobado", hallazgos=[h["regla"] for h in v["hallazgos"]])
-            if m != "claude_ref" and JUEZ:
+            if m != "claude_ref":
+                SALIDAS[(agente, caso, m)] = (payload, out)
+            if m != "claude_ref" and JUEZ and os.environ.get("JUEZ_ABSOLUTO") == "1":
                 try:
                     jz = juzgar(agente, payload, out)
                 except Exception as e:  # noqa: BLE001
@@ -164,7 +178,9 @@ def evaluar_revision(m, caso, d, br, r):
     if not (api_d and dm and limpio) or not (d / "defectos").exists():
         return None
     detalle, costo = [], 0.0
-    variantes = [("limpio", None, limpio)] + [(x["id"], x, x["backend_code"]) for x in (J(p) for p in sorted((d / "defectos").glob("D*.json")))]
+    defs_ = [J(p) for p in sorted((d / "defectos").glob("D*.json"))]
+    defs_ = [x for x in defs_ if x["tipo"] == "logica"][:CR_LOGICA] + [x for x in defs_ if x["tipo"] != "logica"]
+    variantes = [("limpio", None, limpio)] + [(x["id"], x, x["backend_code"]) for x in defs_]
     for vid, defecto, back in variantes:
         ctx = {"req_id": caso, "api_design": api_d, "data_model": dm, "backend_code": back, "qa_suite": qa}
         payload = orch._special_payload("code-review-agent", ctx)
@@ -174,7 +190,9 @@ def evaluar_revision(m, caso, d, br, r):
             files = verify.app_files(ctx)
             hall = out.get("hallazgos", [])
             if defecto is None:
-                detalle.append({"variante": vid, "falsos_positivos": sum(h.get("severidad") in ("critico", "mayor") for h in hall)})
+                graves_l = [h for h in hall if h.get("severidad") in ("critico", "mayor")]
+                detalle.append({"variante": vid, "falsos_positivos": len(graves_l),        # para la muestra humana de FP
+                                "hallazgos_graves": [{k: h.get(k) for k in ("severidad", "categoria", "archivo", "linea", "descripcion", "regla", "detalle") if h.get(k) is not None} for h in graves_l][:12]})
             else:
                 graves = [h for h in hall if h.get("severidad") in ("critico", "mayor")]
                 en_handler = sum(_detecta(files, defecto["endpoint"], [h]) for h in graves)
@@ -189,13 +207,48 @@ def evaluar_revision(m, caso, d, br, r):
     return r
 
 
-trabajos = [(m, a, c) for m in MODELOS for a in AGENTES for c in casos]
+SALIDAS: dict = {}
+trabajos = [(m, a, c) for m in MODELOS for a in AGENTES for c in casos if m != "claude_ref" or c in CASOS_CLAUDE]
 filas, lock = [], threading.Lock()
 with ThreadPoolExecutor(max_workers=int(os.environ.get("WORKERS", "12"))) as ex:
     for x in ex.map(evaluar, trabajos):
         if x:
             with lock:
                 filas.append(x)
+
+PARES_TXT = ("Eres un revisor técnico senior. Compara dos artefactos (A y B) del agente {agente} producidos para las mismas "
+             "entradas. Criterios: completitud frente a las entradas, coherencia (no contradice ni inventa), especificidad "
+             "(decisiones concretas y verificables) y utilidad para el siguiente agente. No premies la longitud. Responde solo "
+             "con JSON: {{\"ganador\": \"A\" | \"B\" | \"empate\", \"motivo\": \"<una frase>\"}}")
+
+
+def comparar(agente, caso, m1, m2):
+    """Juez por pares, ciego y con orden al azar (semilla por caso): más discriminativo que la escala 1–5 (humo 6b073c94)."""
+    p1, o1 = SALIDAS[(agente, caso, m1)]; _, o2 = SALIDAS[(agente, caso, m2)]
+    inv = int(_hl.sha256(f"{caso}{agente}{m1}{m2}".encode()).hexdigest(), 16) % 2 == 1
+    a, b = (o2, o1) if inv else (o1, o2)
+    ad = build_adapter(f"juez@{JUEZ}", dict(reg.providers_cfg["providers"][JUEZ]), ROOT)
+    msgs = [{"role": "system", "content": PARES_TXT.format(agente=agente)},
+            {"role": "user", "content": "## Entradas\n```json\n" + json.dumps(p1, ensure_ascii=False)[:40000] + "\n```\n## A\n```json\n" +
+             json.dumps(a, ensure_ascii=False)[:40000] + "\n```\n## B\n```json\n" + json.dumps(b, ensure_ascii=False)[:40000] + "\n```"}]
+    costo = 0.0
+    for _ in range(3):
+        try:
+            r = ad.complete(msgs); costo += float((r.meta or {}).get("costo_usd") or 0)
+            t = r.text; g = json.loads(t[t.find("{"):t.rfind("}") + 1]).get("ganador")
+            if g in ("A", "B", "empate"):
+                gan = "empate" if g == "empate" else ((m2 if g == "A" else m1) if inv else (m1 if g == "A" else m2))
+                return {"agente": agente, "caso": caso, "par": f"{m1} vs {m2}", "ganador": gan, "invertido": inv, "costo_usd": costo}
+        except Exception:  # noqa: BLE001
+            pass
+    return {"agente": agente, "caso": caso, "par": f"{m1} vs {m2}", "ganador": None, "costo_usd": costo}
+
+
+abiertos = [m for m in MODELOS if m != "claude_ref"]
+duelos_t = [(a, c, m1, m2) for a in AGENTES if a in ("solution-architect-agent", "data-model-agent", "security-compliance-agent")
+            for c in casos for m1, m2 in itertools.combinations(abiertos, 2) if (a, c, m1) in SALIDAS and (a, c, m2) in SALIDAS]
+with ThreadPoolExecutor(max_workers=int(os.environ.get("WORKERS", "12"))) as ex:
+    duelos = list(ex.map(lambda t: comparar(*t), duelos_t)) if JUEZ else []
 
 METRICA = {"backend-developer-agent": "pass_at_1", "code-review-agent": None}
 tabla = {}
@@ -269,7 +322,19 @@ for a in AGENTES:
             wx[f"{m1} vs {m2}"] = {"n": len(com), "mediana_dif": round(float(statistics.median(dif)), 3), "p": round(float(res.pvalue), 4)}
         tabla[a]["wilcoxon"] = wx
 
+for a in {x["agente"] for x in duelos}:
+    res = {}
+    for par in sorted({x["par"] for x in duelos if x["agente"] == a}):
+        xs = [x for x in duelos if x["agente"] == a and x["par"] == par and x["ganador"]]
+        m1, m2 = par.split(" vs ")
+        g1, g2 = sum(x["ganador"] == m1 for x in xs), sum(x["ganador"] == m2 for x in xs)
+        p = min(1.0, 2 * stats.binom.cdf(min(g1, g2), g1 + g2, 0.5)) if g1 + g2 else 1.0     # prueba de signo, empates fuera
+        res[par] = {"n": len(xs), f"gana_{m1}": g1, f"gana_{m2}": g2, "empates": len(xs) - g1 - g2, "p_signo": round(float(p), 4)}
+    tabla.setdefault(a, {})["juez_pares"] = res
+tabla["_costo_juez_usd"] = round(sum(x["costo_usd"] for x in duelos), 4)
+tabla["_casos_claude"] = sorted(CASOS_CLAUDE)
 d = Path("/tmp/bench"); d.mkdir(exist_ok=True)
+(d / "duelos.jsonl").write_text("".join(json.dumps(x, ensure_ascii=False) + "\n" for x in duelos), encoding="utf-8")
 (d / "entorno.json").write_text(json.dumps(ENTORNO, ensure_ascii=False, indent=1), encoding="utf-8")
 (d / "detalle.jsonl").write_text("".join(json.dumps(f, ensure_ascii=False) + "\n" for f in filas), encoding="utf-8")
 (d / "tabla.json").write_text(json.dumps(tabla, ensure_ascii=False, indent=1), encoding="utf-8")

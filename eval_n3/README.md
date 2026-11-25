@@ -28,6 +28,19 @@ aparecen en el reporte de pruebas y bandit señala los patrones de seguridad). M
 
 El juez no califica los artefactos de Claude (techo); su acuerdo con la revisión humana del 20 % se mide con kappa ponderado.
 
+**Segundo ajuste (humo 6b073c94, 5 casos, USD 8,49).** El juez 1–5 puso casi todo en 5 (sin diferencias), el backend
+pasó solo el 12–19 % de las pruebas en los 4 modelos y code-review dio 6–9 falsos positivos por servicio limpio. Cambios:
+
+- **Pruebas depuradas** (`scripts/eval_n3/depurar_pruebas.py`): se quitan los asserts que exigen ids del catálogo de errores
+  (`ERR-nnn`, convención del generador de referencias que el prompt del backend no pide) y los que comparan contra
+  literales que la entrada no fija. 313 asserts quitados en 28 casos; los 28 servicios limpios siguen pasando todas sus
+  pruebas; 1 mutante de lógica deja de morir (`muerto_por_pruebas: false`). Las originales quedan en `pruebas_aceptacion.v0.json`.
+- **Juez por pares**, ciego y con orden al azar: para cada caso y agente, cada par de modelos abiertos; prueba de signo
+  (empates fuera). La escala 1–5 queda opcional (`JUEZ_ABSOLUTO=1`).
+- **Falsos positivos**: se guardan los hallazgos graves sobre el servicio limpio para una muestra humana de 10.
+- **Ahorro**: Claude solo en 10 casos estratificados por autor (`CLAUDE_CASOS`), por la Batch API (50 %), y code-review con
+  limpio + 1 mutante de lógica + 2 de seguridad (`CR_LOGICA=1`).
+
 ## 2. Estructura
 
 ```

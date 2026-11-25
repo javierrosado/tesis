@@ -2,6 +2,8 @@ name: release-manager-agent
 domain: devops
 phase: devops
 version: "1.0"
+model_tier: N2            # nivel de razonamiento a priori (C1–C4 = 7/12), Seleccion_Modelos_por_Nivel_Razonamiento v1.0
+reasoning_effort: medio       # lo traduce el router al parámetro del proveedor (config/niveles.yaml)
 purpose: >
   Coordinar el versionado semántico, la ventana de despliegue, los criterios formales de go/no-go y la
   estrategia de rollback, garantizando que solo llegue a staging/producción lo que supera todos los controles.

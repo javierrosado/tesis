@@ -21,5 +21,5 @@ def build_adapter(name: str, cfg: dict, repo_root) -> ModelAdapter:
         return OllamaAdapter(cfg)
     if kind == "openai_compat":
         from .openai_compat import OpenAICompatAdapter
-        return OpenAICompatAdapter(cfg)
+        return OpenAICompatAdapter({**cfg, "_registro": name})
     raise ValueError(f"adaptador desconocido: {kind}")

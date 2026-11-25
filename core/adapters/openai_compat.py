@@ -1,7 +1,10 @@
-"""Adaptador para un servidor compatible con la API de chat de OpenAI que corre DENTRO del entorno
-(p. ej. vLLM sirviendo un modelo open-weight y sus adaptadores LoRA). No usa proveedores externos ni
-API keys comerciales: la URL apunta a localhost en el job de HF. Salida estructurada por JSON Schema."""
-import copy, json, sys, time, urllib.error, urllib.request
+"""Adaptador para un servidor compatible con la API de chat de OpenAI.
+- v1: vLLM DENTRO del job de HF (modelo open-weight y sus LoRA), URL en localhost, sin API keys.
+- v2 (D-P5): HF Inference Providers (router.huggingface.co/v1) para modelos open-weight de frontera, con el HF_TOKEN de la
+  cuenta y el proveedor fijado en el nombre del modelo ("repo:proveedor"). Acepta reasoning_effort y, si el proveedor no
+  ofrece salida estructurada, deja la validación del contrato al puerto.
+`registro` es el nombre del proveedor en config/providers.yaml (lo graba G2 en cada <artefacto>.input.r<n>.json)."""
+import copy, os, json, sys, time, urllib.error, urllib.request
 from .base import ModelResponse
 
 def _grammar_safe(schema, drop_patterns: bool = False):
@@ -30,18 +33,25 @@ class OpenAICompatAdapter:
 
     def __init__(self, cfg: dict):
         self.url = cfg.get("url", "http://localhost:8000/v1").rstrip("/") + "/chat/completions"
+        self.registro = cfg.get("_registro", self.name)
         self.model = cfg["model"]
         self.max_tokens = cfg.get("max_new_tokens", 4096)
         self.temperature = cfg.get("temperature", 0.2)
         self.chat_kwargs = cfg.get("chat_template_kwargs", {})
         self.timeout = cfg.get("timeout_s", 900)
         self.context = cfg.get("context_tokens", 32000)
+        self.api_key = os.environ.get(cfg["api_key_env"], "") if cfg.get("api_key_env") else ""     # v2: HF Inference Providers
+        self.estructurada = cfg.get("salida_estructurada", True)
+        self.reasoning_effort = cfg.get("reasoning_effort") if cfg.get("acepta_reasoning_effort") else None
 
     def capabilities(self) -> dict:
         return {"json_mode": True, "context_tokens": self.context, "language": "es", "tools": ["rag.search"]}
 
     def _post(self, body: dict) -> dict:
-        req = urllib.request.Request(self.url, data=json.dumps(body).encode(), headers={"Content-Type": "application/json"})
+        headers = {"Content-Type": "application/json"}
+        if self.api_key:
+            headers["Authorization"] = f"Bearer {self.api_key}"
+        req = urllib.request.Request(self.url, data=json.dumps(body).encode(), headers=headers)
         return json.load(urllib.request.urlopen(req, timeout=self.timeout))
 
     def complete(self, messages, schema=None, tools=None) -> ModelResponse:
@@ -49,6 +59,11 @@ class OpenAICompatAdapter:
         body = {"model": self.model, "messages": chat, "max_tokens": self.max_tokens, "temperature": self.temperature}
         if self.chat_kwargs:
             body["chat_template_kwargs"] = self.chat_kwargs
+        if self.reasoning_effort:
+            body["reasoning_effort"] = self.reasoning_effort
+        if schema and not self.estructurada:       # el proveedor no acepta response_format: el contrato lo valida el puerto
+            chat[-1] = {**chat[-1], "content": chat[-1]["content"] + "\n\nResponde solo con un objeto JSON que cumpla el esquema indicado."}
+            schema = None
         if schema:
             body["response_format"] = {"type": "json_schema", "json_schema": {"name": schema.get("title", "salida"), "schema": _grammar_safe(schema)}}
         t0 = time.time()

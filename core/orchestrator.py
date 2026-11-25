@@ -309,7 +309,7 @@ class Orchestrator:
                           else {k: sha(v) for k, v in payload.items()} if isinstance(payload, dict) else {"payload": sha(payload)}),
                "knowledge_refs": knowledge_refs, "knowledge_sha256": sha(knowledge or ""),
                "modelo": revs.get("base", modelo) if adaptador else revs.get("modelos", {}).get(modelo, modelo),
-               "adaptador": adaptador, "proveedor": getattr(ad, "name", None),
+               "adaptador": adaptador, "proveedor": getattr(ad, "registro", None) or getattr(ad, "name", None),
                "prompt_sha256": sha(msgs), "feedback_aplicado": feedback or [], "correccion_humana": correccion,
                "ts": calendario.ahora_lima()}
         out = self._out_dir(req_id)

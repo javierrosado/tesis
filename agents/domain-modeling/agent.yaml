@@ -2,6 +2,8 @@ name: domain-modeling-agent
 domain: discovery
 phase: discovery
 version: "1.0"
+model_tier: N2            # nivel de razonamiento a priori (C1–C4 = 8/12), Seleccion_Modelos_por_Nivel_Razonamiento v1.0
+reasoning_effort: medio       # lo traduce el router al parámetro del proveedor (config/niveles.yaml)
 purpose: >
   Derivar de las historias de usuario el modelo de dominio del requerimiento: entidades con invariantes,
   eventos de dominio y transiciones de estado, alineados al lenguaje ubicuo del glosario y a las reglas de negocio.

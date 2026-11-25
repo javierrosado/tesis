@@ -52,6 +52,9 @@ TEACHER = os.environ.get("TEACHER_MODEL", "Qwen/Qwen3-32B-AWQ")   # D-F4-1 C; TE
 # G2: revisiones exactas de modelos y adaptadores; el orquestador las graba en cada <artefacto>.input.r<n>.json
 REVS = {"base": _rev(BASE), "modelos": {BASE: _rev(BASE), **({TEACHER: _rev(TEACHER)} if TEACHER.lower() != "none" else {})},
         "loras": {a: _rev(repo) for a, repo in _pares}}
+from core.registry import Registry as _Reg   # noqa: E402
+for _m in _Reg(ROOT).modelos_hf():          # v2 (D-P5): modelos de HF Inference Providers que usa el router por nivel
+    REVS["modelos"][_m] = _rev(_m.split(":")[0]) + f" vía {_m.split(':')[1] if ':' in _m else 'auto'}"
 os.environ["MODEL_REVS"] = json.dumps(REVS)
 ENTORNO["modelos"] = REVS
 print("MODELOS", json.dumps(REVS, ensure_ascii=False), flush=True)

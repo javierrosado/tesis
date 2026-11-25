@@ -2,6 +2,8 @@ name: cicd-pipeline-agent
 domain: devops
 phase: devops
 version: "1.0"
+model_tier: N1            # nivel de razonamiento a priori (C1–C4 = 6/12), Seleccion_Modelos_por_Nivel_Razonamiento v1.0
+reasoning_effort: bajo        # lo traduce el router al parámetro del proveedor (config/niveles.yaml)
 purpose: >
   Diseñar los pipelines de CI/CD por ambiente con stages build → test → deploy y puertas de calidad,
   integrando pruebas automatizadas y controles de seguridad.

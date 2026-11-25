@@ -32,15 +32,16 @@ from huggingface_hub import CommitOperationAdd, HfApi, hf_hub_download, snapshot
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from core import calendario  # noqa: E402
 
-RUNS = os.environ.get("RUNS_REPO") or f"{os.environ['HF_USERNAME']}/tesis-runs"
+RUNS = os.environ.get("RUNS_REPO") or f"{os.environ.get('HF_USERNAME', 'jrosado1974')}/tesis-runs"
 
 
 def _state(pilot):
     return Path(snapshot_download(RUNS, repo_type="dataset", allow_patterns=[f"piloto/{pilot}/estado/**"], force_download=True)) / "piloto" / pilot / "estado"
 
 
-def pendientes(a):
-    base = _state(a.pilot); res = []
+def listar_pendientes(base: Path) -> list[dict]:
+    """Gates humanos abiertos (pendiente sin aprobación con el mismo hash). La usan la CLI y la consola (space/)."""
+    res = []
     for req in sorted(p.name for p in base.iterdir()) if base.exists() else []:
         out = base / req / "output"
         for p in sorted((out / "pendientes").glob("*.json")) if (out / "pendientes").exists() else []:
@@ -48,10 +49,16 @@ def pendientes(a):
             ap = out / "aprobaciones" / p.name
             if ap.exists() and json.loads(ap.read_text(encoding="utf-8")).get("hash") == pend["hash"]:
                 continue
-            art = json.loads((out / f"{p.stem}.json").read_text(encoding="utf-8"))
+            f = out / f"{p.stem}.json"
+            art = json.loads(f.read_text(encoding="utf-8")) if f.exists() else None
             res.append({"req": req, "artefacto": p.stem, "rol": pend["rol"], "hash": pend["hash"], "solicitado": pend["solicitado"],
-                        "hallazgos_governance": pend.get("hallazgos_governance", []), "contenido": art})
-    print(json.dumps(res, ensure_ascii=False, indent=1))
+                        "escalado": bool(pend.get("escalado")), "hallazgos_governance": pend.get("hallazgos_governance", []),
+                        "dictamen_ia": pend.get("dictamen_ia"), "contenido": art})
+    return res
+
+
+def pendientes(a):
+    print(json.dumps(listar_pendientes(_state(a.pilot)), ensure_ascii=False, indent=1))
 
 
 def decidir(a):
@@ -65,11 +72,19 @@ def decidir(a):
     print(json.dumps(rec, ensure_ascii=False))
 
 
-def lote(a):
-    spec = json.loads(Path(a.archivo).read_text(encoding="utf-8"))
-    base = _state(a.pilot); ts = datetime.now(timezone.utc).isoformat(timespec="seconds"); ops, regs = [], []
+def registros_lote(base: Path, spec: dict, pilot: str, ts: str) -> tuple[list[tuple[str, bytes]], list[dict]]:
+    """Arma los archivos de una ventana de decisiones (sin subir nada): una aprobación por artefacto y el acta de la ventana.
+    Valida que cada decisión apunte a un pendiente abierto y que una devolución tenga motivo."""
+    ops, regs = [], []
     for d in spec["decisiones"]:
-        pend = json.loads((base / d["req"] / "output" / "pendientes" / f"{d['artefacto']}.json").read_text(encoding="utf-8"))
+        if d["decision"] not in ("approved", "returned"):
+            raise ValueError(f"{d['req']}/{d['artefacto']}: decisión inválida {d['decision']}")
+        if d["decision"] == "returned" and not d.get("motivo", "").strip():
+            raise ValueError(f"{d['req']}/{d['artefacto']}: devolver exige motivo")
+        fp = base / d["req"] / "output" / "pendientes" / f"{d['artefacto']}.json"
+        if not fp.exists():
+            raise ValueError(f"{d['req']}/{d['artefacto']}: no hay gate pendiente")
+        pend = json.loads(fp.read_text(encoding="utf-8"))
         # G5: el dictamen lo genera el job (governance + maestro) y viene en el pendiente; uno externo solo se acepta si
         # no lo hay (ensayo1) y se marca con su origen
         dic = pend.get("dictamen_ia") or ({**d["dictamen_ia"], "por": d["dictamen_ia"].get("por", "externo")} if d.get("dictamen_ia") else {})
@@ -77,12 +92,22 @@ def lote(a):
                "hash": pend["hash"], "ts": ts, "ventana": spec.get("ventana"),
                "dictamen_ia": dic or None,
                "coincide_con_ia": (dic.get("recomendacion") == d["decision"]) if dic else None}
-        ops.append(CommitOperationAdd(f"piloto/{a.pilot}/estado/{d['req']}/output/aprobaciones/{d['artefacto']}.json",
-                                      json.dumps(rec, ensure_ascii=False, indent=1).encode()))
+        if spec.get("canal"):
+            rec["canal"] = spec["canal"]
+        ops.append((f"piloto/{pilot}/estado/{d['req']}/output/aprobaciones/{d['artefacto']}.json",
+                    json.dumps(rec, ensure_ascii=False, indent=1).encode()))
         regs.append({"req": d["req"], "artefacto": d["artefacto"], **rec})
-    ops.append(CommitOperationAdd(f"piloto/{a.pilot}/ventanas/{ts.replace(':', '')}.json",
-                                  json.dumps({**spec, "registrado": ts, "registros": regs}, ensure_ascii=False, indent=1).encode()))
-    HfApi().create_commit(RUNS, repo_type="dataset", operations=ops, commit_message=f"{a.pilot}: ventana {spec.get('ventana')} · {len(regs)} decisiones")
+    ops.append((f"piloto/{pilot}/ventanas/{ts.replace(':', '')}.json",
+                json.dumps({**spec, "registrado": ts, "registros": regs}, ensure_ascii=False, indent=1).encode()))
+    return ops, regs
+
+
+def lote(a):
+    spec = json.loads(Path(a.archivo).read_text(encoding="utf-8"))
+    ts = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    ops, regs = registros_lote(_state(a.pilot), spec, a.pilot, ts)
+    HfApi().create_commit(RUNS, repo_type="dataset", operations=[CommitOperationAdd(p, b) for p, b in ops],
+                          commit_message=f"{a.pilot}: ventana {spec.get('ventana')} · {len(regs)} decisiones")
     print(json.dumps({"registradas": len(regs), "aprobadas": sum(r["decision"] == "approved" for r in regs),
                       "devueltas": sum(r["decision"] == "returned" for r in regs), "ts": ts}, ensure_ascii=False))
 
@@ -113,30 +138,41 @@ def calendario_cmd(a):
     print(json.dumps(cfg, ensure_ascii=False, indent=1, default=str))
 
 
+def registro_defecto(req, etapa_deteccion, severidad, descripcion, etapa_origen=None, por="Javier Rosado") -> dict:
+    return {"event": "defect_detected", "req_id": req, "deteccion": "escapado", "etapa_deteccion": etapa_deteccion,
+            "etapa_origen": etapa_origen or "no_determinada", "severidad": severidad, "descripcion": descripcion,
+            "fecha": calendario.ahora_lima(), "registrado_por": por, "ts": datetime.now(timezone.utc).isoformat(timespec="seconds")}
+
+
+def registro_despliegue(req, resultado, motivo, por="Javier Rosado") -> dict:
+    return {"event": "deployment_outcome", "req_id": req, "deployment_id": f"DEP-{req}", "resultado": resultado, "motivo": motivo,
+            "fecha": calendario.ahora_lima(), "registrado_por": por, "ts": datetime.now(timezone.utc).isoformat(timespec="seconds")}
+
+
 def defecto(a):
-    reg = {"event": "defect_detected", "req_id": a.req, "deteccion": "escapado", "etapa_deteccion": a.etapa_deteccion,
-           "etapa_origen": a.etapa_origen or "no_determinada", "severidad": a.severidad, "descripcion": a.descripcion,
-           "fecha": calendario.ahora_lima(), "registrado_por": a.por, "ts": datetime.now(timezone.utc).isoformat(timespec="seconds")}
-    _append(a.pilot, "defectos_escapados", reg)
+    _append(a.pilot, "defectos_escapados", registro_defecto(a.req, a.etapa_deteccion, a.severidad, a.descripcion, a.etapa_origen, a.por))
 
 
 def despliegue(a):
-    reg = {"event": "deployment_outcome", "req_id": a.req, "deployment_id": f"DEP-{a.req}", "resultado": a.resultado, "motivo": a.motivo,
-           "fecha": calendario.ahora_lima(), "registrado_por": a.por, "ts": datetime.now(timezone.utc).isoformat(timespec="seconds")}
-    _append(a.pilot, "post_despliegue", reg)
+    _append(a.pilot, "post_despliegue", registro_despliegue(a.req, a.resultado, a.motivo, a.por))
 
 
-ap = argparse.ArgumentParser(); sp = ap.add_subparsers(dest="cmd", required=True)
-for n in ("pendientes", "estado", "calendario"):
-    x = sp.add_parser(n); x.add_argument("--pilot", required=True)
-x = sp.add_parser("decidir"); x.add_argument("--pilot", required=True); x.add_argument("--req", required=True); x.add_argument("--artefacto", required=True)
-x.add_argument("--decision", choices=["approved", "returned"], required=True); x.add_argument("--motivo"); x.add_argument("--por", default="Javier Rosado")
-x = sp.add_parser("lote"); x.add_argument("--pilot", required=True); x.add_argument("--archivo", required=True)
-x = sp.add_parser("defecto"); x.add_argument("--pilot", required=True); x.add_argument("--req", required=True)
-x.add_argument("--etapa-deteccion", choices=["smoke", "staging", "aceptacion"], required=True)
-x.add_argument("--severidad", choices=["critica", "alta", "media", "baja"], required=True); x.add_argument("--descripcion", required=True)
-x.add_argument("--etapa-origen", help="agente donde se originó, si se sabe"); x.add_argument("--por", default="Javier Rosado")
-x = sp.add_parser("despliegue"); x.add_argument("--pilot", required=True); x.add_argument("--req", required=True)
-x.add_argument("--resultado", choices=["rollback", "correccion"], required=True); x.add_argument("--motivo", required=True); x.add_argument("--por", default="Javier Rosado")
-a = ap.parse_args()
-{"pendientes": pendientes, "decidir": decidir, "estado": estado, "lote": lote, "calendario": calendario_cmd, "defecto": defecto, "despliegue": despliegue}[a.cmd](a)
+def main():
+    ap = argparse.ArgumentParser(); sp = ap.add_subparsers(dest="cmd", required=True)
+    for n in ("pendientes", "estado", "calendario"):
+        x = sp.add_parser(n); x.add_argument("--pilot", required=True)
+    x = sp.add_parser("decidir"); x.add_argument("--pilot", required=True); x.add_argument("--req", required=True); x.add_argument("--artefacto", required=True)
+    x.add_argument("--decision", choices=["approved", "returned"], required=True); x.add_argument("--motivo"); x.add_argument("--por", default="Javier Rosado")
+    x = sp.add_parser("lote"); x.add_argument("--pilot", required=True); x.add_argument("--archivo", required=True)
+    x = sp.add_parser("defecto"); x.add_argument("--pilot", required=True); x.add_argument("--req", required=True)
+    x.add_argument("--etapa-deteccion", choices=["smoke", "staging", "aceptacion"], required=True)
+    x.add_argument("--severidad", choices=["critica", "alta", "media", "baja"], required=True); x.add_argument("--descripcion", required=True)
+    x.add_argument("--etapa-origen", help="agente donde se originó, si se sabe"); x.add_argument("--por", default="Javier Rosado")
+    x = sp.add_parser("despliegue"); x.add_argument("--pilot", required=True); x.add_argument("--req", required=True)
+    x.add_argument("--resultado", choices=["rollback", "correccion"], required=True); x.add_argument("--motivo", required=True); x.add_argument("--por", default="Javier Rosado")
+    a = ap.parse_args()
+    {"pendientes": pendientes, "decidir": decidir, "estado": estado, "lote": lote, "calendario": calendario_cmd, "defecto": defecto, "despliegue": despliegue}[a.cmd](a)
+
+
+if __name__ == "__main__":
+    main()

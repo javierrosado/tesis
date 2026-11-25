@@ -17,7 +17,8 @@ from pathlib import Path
 
 BRANCH = os.environ.get("BRANCH", "main"); PILOT = os.environ["PILOT"]; RUNS = os.environ["RUNS_REPO"]
 BASE = os.environ.get("BASE", "Qwen/Qwen3-8B"); WORKERS = int(os.environ.get("WORKERS", "8"))
-url = f"https://github.com/javierrosado/tesis/archive/refs/heads/{BRANCH}.tar.gz"
+TAG = os.environ.get("TAG")                     # Fase B: el piloto corre sobre el tag congelado (v1.0-piloto)
+url = f"https://github.com/javierrosado/tesis/archive/refs/{'tags/' + TAG if TAG else 'heads/' + BRANCH}.tar.gz"
 _auth = {"Authorization": "token " + os.environ["GITHUB_TOKEN"]} if os.environ.get("GITHUB_TOKEN") else {}  # repo privado desde el 23/11/2026
 _tar = tarfile.open(fileobj=io.BytesIO(urllib.request.urlopen(urllib.request.Request(url, headers=_auth)).read())); _tar.extractall("/tmp", filter="data")
 ROOT = Path("/tmp") / _tar.getnames()[0].split("/")[0]; os.chdir(ROOT); sys.path.insert(0, str(ROOT))  # nombre real de la carpeta (GitHub quita la 'v' inicial de ramas como v2-*)
@@ -26,6 +27,17 @@ ENTORNO = _entorno({"job": os.environ.get("JOB_ID", "local"), "branch": BRANCH})
 from huggingface_hub import HfApi, snapshot_download   # noqa: E402
 api = HfApi()
 PREP = os.environ.get("PREPARAR_EVAL")          # v2 · eval_n3: genera N requerimientos SIM-E0x con el maestro antes de correr
+# G6 (consola, D-C8): en el piloto real la entrada vive solo en el dataset privado (piloto/<p>/requerimientos/<REQ>/input),
+# nunca en GitHub; se trae antes de listar los requerimientos. El input no se modifica: es el que se registró en el alta.
+try:
+    _rq = Path(snapshot_download(RUNS, repo_type="dataset", allow_patterns=[f"piloto/{PILOT}/requerimientos/*/input/*"])) / "piloto" / PILOT / "requerimientos"
+    for _d in sorted(_rq.iterdir()) if _rq.exists() else []:
+        if (_d / "input").exists():
+            (ROOT / "data/requerimientos" / _d.name).mkdir(parents=True, exist_ok=True)
+            subprocess.run(["cp", "-rL", str(_d / "input"), str(ROOT / "data/requerimientos" / _d.name)], check=False)
+            print("entrada desde el dataset:", _d.name, flush=True)
+except Exception as e:  # noqa: BLE001
+    print("sin requerimientos en el dataset:", str(e)[:120])
 reqs = sorted(p.name for p in (ROOT / "data/requerimientos").iterdir() if (p / "input").exists()) if os.environ.get("ALL") == "1" \
     else [] if PREP else os.environ["REQS"].split(",")
 

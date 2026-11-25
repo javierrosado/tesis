@@ -14,6 +14,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 from core.orchestrator import ARTEFACT_NAME, Orchestrator   # noqa: E402
 from core.telemetry import Telemetry                        # noqa: E402
+from core.intake import load_business_request              # noqa: E402
 
 N3 = ["solution-architect-agent", "security-compliance-agent", "data-model-agent", "backend-developer-agent"]
 # code-review se arma en sembrar.py (necesita el servicio con defectos)
@@ -40,6 +41,9 @@ def congelar(estado: Path, salida: Path) -> dict:
             if _aprobado(out, art):
                 ctx[art] = json.loads((out / f"{art}.json").read_text(encoding="utf-8"))
         dest = salida / req; (dest / "entradas").mkdir(parents=True, exist_ok=True)
+        if (estado / req / "input").exists():          # el BusinessRequest v1.1 del caso (para el conocimiento y governance)
+            ctx["business_request"] = load_business_request(estado / req)
+            (dest / "business_request.json").write_text(json.dumps(ctx["business_request"], ensure_ascii=False, indent=1), encoding="utf-8")
         hechos = []
         for ag in N3:
             n = nodes[ag]
@@ -55,10 +59,9 @@ def congelar(estado: Path, salida: Path) -> dict:
             if art in ctx:
                 (dest / "pipeline_v1").mkdir(exist_ok=True)
                 (dest / "pipeline_v1" / f"{art}.json").write_text(json.dumps(ctx[art], ensure_ascii=False, indent=1), encoding="utf-8")
-        br = (ROOT / "data/requerimientos" / req / "input")
         caso = {"req_id": req, "entradas": hechos,
                 "sha256": {f.name: hashlib.sha256(f.read_bytes()).hexdigest() for f in sorted((dest / "entradas").glob("*.json"))},
-                "input_requerimiento": str(br) if br.exists() else None}
+                "business_request": "business_request.json" if "business_request" in ctx else None}
         (dest / "caso.json").write_text(json.dumps(caso, ensure_ascii=False, indent=1), encoding="utf-8")
         resumen[req] = hechos
     return resumen

@@ -1,5 +1,6 @@
-"""Adaptador Anthropic. SOLO para pruebas internas de la Fase 1; ningún resultado producido con él
-se reporta en la tesis. Traduce el JSON Schema a una herramienta forzada para obtener salida estructurada."""
+"""Adaptador Anthropic. Usos: (1) pruebas internas de la Fase 1 (no se reportan); (2) v2: referencia de techo del
+benchmark N3 (`claude_ref`, API de pago por uso, model_id fijado) y, solo en el escalón E4 con C1–C4 cumplidas,
+code-review y security-compliance (declarado como desviación). Traduce el JSON Schema a una herramienta forzada."""
 import os, time
 from .base import ModelResponse
 

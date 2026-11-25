@@ -128,3 +128,18 @@ def test_inputs_auditables_y_eventos_en_vivo(tmp_path, monkeypatch, capsys):
     eventos = [l for l in capsys.readouterr().out.splitlines() if l.startswith("EVENT ")]
     assert eventos and json.loads(eventos[0][6:])["event"]
     assert len(eventos) == len(tel.read())
+
+
+def test_g4_contexto_v11_sintetico():
+    """G4: el contexto v1.1 de los casos de prueba solo agrega los tres textos y respeta el contrato."""
+    sys.path.insert(0, str(ROOT / "scripts"))
+    import g4_contexto as g4
+    br10 = load_business_request(ROOT / "data/requerimientos/SIM-P05-R001", version="1.0")
+    msgs = [{"role": "system", "content": "s"}, {"role": "user", "content": "## Entrada (x)\n```json\n" + json.dumps(br10, indent=1) + "\n```\n\nresto"}]
+    assert g4.leer_br(msgs) == br10
+    br11 = g4.br_v11(br10, "[Correo] texto libre del pedido original, informal y con algo de ambigüedad.", None)
+    jsonschema.validate(br11, REG.agents["product-analyst-agent"].input_schema)
+    assert {k for k in br11 if br11.get(k) != br10.get(k)} == {"contract_version", "historia_original", "criterios_aceptacion", "notas_refinamiento"}
+    assert g4.leer_br(g4.con_br(msgs, br11)) == br11 and br11["criterios_aceptacion"].startswith("_No documentados")
+    ids = [f"SIM-T01-R{i:03d}" for i in range(24)]
+    assert len(g4.documentados(ids)) == 7 and g4.documentados(ids) == g4.documentados(list(reversed(ids)))

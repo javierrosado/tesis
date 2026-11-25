@@ -89,7 +89,9 @@ def evaluar(job):
             return None
         out, st = llamar(m, agente, caso, payload, br)
         r.update(contrato=True, tokens_out=st["tokens_out"], latencia_ms=st["latency_ms"], costo_usd=st.get("costo_usd", 0), intentos=st["attempts"])
-        ctx = {"req_id": caso, "business_request": br, **{k: J(d / "pipeline_v1" / f"{k}.json") for k in ("api_design", "data_model") if (d / "pipeline_v1" / f"{k}.json").exists()}}
+        # humo 6b072dce: con solo api_design y data_model, governance no veía la arquitectura (F5.comps_valid de security
+        # fallaba siempre) ni el dominio (entity_coverage de data-model pasaba sin comparar). Se carga todo lo aprobado aguas arriba.
+        ctx = {"req_id": caso, "business_request": br, **{p.stem: J(p) for p in sorted((d / "pipeline_v1").glob("*.json"))}}
         if agente == "backend-developer-agent":
             ref, pruebas = J(d / "servicio_limpio.json"), J(d / "pruebas_aceptacion.json")
             if not ref or not pruebas:
@@ -97,6 +99,8 @@ def evaluar(job):
             back = {**out, "semillas": ref["semillas"]}           # datos de referencia del caso: las pruebas los referencian por id
             files = sandbox.render_app(payload["api_design"], payload["data_model"], back)
             rt = sandbox.run_tests(files, pruebas)
+            r.update(def_repetida=sum(bool(h.get("lineas")) and h["lineas"][0].lstrip().startswith("def ") for h in out.get("handlers", [])),
+                     fallos=[f"{f['prueba']}: {f['detalle'][:160]}" for f in rt["fallos"][:5]])
             r.update(pruebas=rt["collected"], pasan=rt["passed"], pass_at_1=rt["collected"] > 0 and rt["passed"] == rt["collected"],
                      tasa=round(rt["passed"] / rt["collected"], 3) if rt["collected"] else 0.0)
         else:
@@ -115,7 +119,11 @@ def _detecta(files, endpoint, hallazgos) -> bool:
 
 def evaluar_revision(m, caso, d, br, r):
     api_d, dm = J(d / "pipeline_v1" / "api_design.json"), J(d / "pipeline_v1" / "data_model.json")
-    qa, limpio = J(d / "pipeline_v1" / "qa_suite.json") or {"suites": []}, J(d / "servicio_limpio.json")
+    # humo 6b072dce: la suite del pipeline v1 se escribió para OTRO backend (sus semillas e ids); contra el servicio limpio
+    # fallaba y los revisores reportaban 7–11 falsos positivos por caso. Se usan las pruebas de aceptación del caso, que
+    # pasan contra el servicio limpio. Con ellas los mutantes de lógica aparecen en el reporte de pruebas (como en el
+    # pipeline); los defectos de seguridad no: el recall se reporta por tipo.
+    qa, limpio = J(d / "pruebas_aceptacion.json") or {"suites": []}, J(d / "servicio_limpio.json")
     if not (api_d and dm and limpio) or not (d / "defectos").exists():
         return None
     detalle, costo = [], 0.0
@@ -161,7 +169,11 @@ for a in AGENTES:
              "costo_usd": round(sum(f.get("costo_usd") or 0 for f in fs), 3)}
         if a == "code-review-agent":
             dd = sum(f.get("defectos", 0) for f in fs); det = sum(f.get("detectados", 0) for f in fs)
-            t.update(defectos=dd, detectados=det, recall_pct=round(100 * det / dd, 1) if dd else None,
+            por_tipo = {}
+            for tp in ("logica", "seguridad"):
+                xs = [x for f in fs for x in f.get("detalle", []) if x.get("tipo") == tp]
+                por_tipo[tp] = round(100 * sum(x.get("detectado", False) for x in xs) / len(xs), 1) if xs else None
+            t.update(defectos=dd, detectados=det, recall_pct=round(100 * det / dd, 1) if dd else None, recall_por_tipo_pct=por_tipo,
                      falsos_positivos_media=round(statistics.mean([f["falsos_positivos"] for f in fs if f.get("falsos_positivos") is not None] or [0]), 2))
         else:
             k = METRICA.get(a) or "aprobado_r0"

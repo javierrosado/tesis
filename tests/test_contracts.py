@@ -82,3 +82,49 @@ def test_dataset_builder_produces_contract_valid_examples(tmp_path, monkeypatch)
     from core.eval_dataset import evaluate_predictions
     res = evaluate_predictions(agent, test, [e["messages"][2]["content"] for e in test])   # el oro contra sí mismo
     assert res["aggregate"]["f5_pass"] == 1.0
+
+
+def test_intake_v11_incluye_contexto_y_cumple_el_contrato():
+    """G1 (D-C7): BusinessRequest v1.1 lleva historia_original, criterios_aceptacion y notas_refinamiento."""
+    schema = REG.agents["product-analyst-agent"].input_schema
+    for d in sorted((ROOT / "data/requerimientos").iterdir()):
+        if (d / "input").exists():
+            br = load_business_request(d)
+            jsonschema.validate(br, schema)
+            assert br["contract_version"] == "1.1" and all(br[k] for k in ("historia_original", "criterios_aceptacion", "notas_refinamiento"))
+    br0 = load_business_request(ROOT / "data/requerimientos/SIM-P05-R001", version="1.0")
+    jsonschema.validate(br0, schema)
+    assert "historia_original" not in br0
+    sin = dict(br0, contract_version="1.1")
+    import pytest
+    with pytest.raises(jsonschema.ValidationError):
+        jsonschema.validate(sin, schema)
+
+
+def test_intake_v11_exige_los_tres_archivos(tmp_path):
+    import pytest, shutil
+    from core.intake import IntakeError
+    shutil.copytree(ROOT / "data/requerimientos/SIM-P05-R001/input", tmp_path / "input")
+    (tmp_path / "input" / "notas_refinamiento.md").unlink()
+    with pytest.raises(IntakeError, match="notas_refinamiento"):
+        load_business_request(tmp_path)
+
+
+def test_inputs_auditables_y_eventos_en_vivo(tmp_path, monkeypatch, capsys):
+    """G2: cada llamada a un agente deja <artefacto>.input.r<n>.json; G3: cada evento sale también como línea EVENT."""
+    import shutil
+    monkeypatch.setenv("PIPELINE_PROVIDER", "prueba_offline")
+    monkeypatch.setenv("MODEL_REVS", json.dumps({"base": "Qwen/Qwen3-8B@abc", "modelos": {}, "loras": {}}))
+    tel = Telemetry(tmp_path / "ev.jsonl", echo=True)
+    out = ROOT / "data/requerimientos/SIM-P05-R001/output"
+    shutil.rmtree(out, ignore_errors=True)
+    orch = Orchestrator(ROOT, tel, seed=1, today="2026-11-24"); orch.reg.gates["mode"] = "auto"
+    orch.run("SIM-P05-R001")
+    rec = json.loads((out / "user_story_set.input.r0.json").read_text(encoding="utf-8"))
+    assert rec["agente"] == "product-analyst-agent" and rec["ronda"] == 0
+    assert set(rec["inputs"]) and all(v.startswith("sha256:") for v in rec["inputs"].values())
+    assert rec["knowledge_sha256"].startswith("sha256:") and rec["prompt_sha256"].startswith("sha256:")
+    assert rec["ts"].endswith("-05:00") and rec["proveedor"]
+    eventos = [l for l in capsys.readouterr().out.splitlines() if l.startswith("EVENT ")]
+    assert eventos and json.loads(eventos[0][6:])["event"]
+    assert len(eventos) == len(tel.read())

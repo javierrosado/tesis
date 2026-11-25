@@ -38,8 +38,23 @@ except Exception as e:  # noqa: BLE001
     print("sin estado previo:", str(e)[:120])
 
 # 2) vLLM con el modelo base y los adaptadores
-mods = [f"{a}={snapshot_download(repo)}" for a, repo in (x.split("=") for x in os.environ.get("ADAPTERS", "").split())]
+def _rev(repo: str) -> str:
+    try:
+        return f"{repo}@{api.model_info(repo).sha}"
+    except Exception:  # noqa: BLE001
+        return f"{repo}@?"
+
+
+_pares = [x.split("=") for x in os.environ.get("ADAPTERS", "").split()]
+mods = [f"{a}={snapshot_download(repo)}" for a, repo in _pares]
 TEACHER = os.environ.get("TEACHER_MODEL", "Qwen/Qwen3-32B-AWQ")   # D-F4-1 C; TEACHER_MODEL=none lo desactiva
+# G5: con puertas manuales el maestro siempre se carga, porque genera el dictamen IA de cada puerta
+# G2: revisiones exactas de modelos y adaptadores; el orquestador las graba en cada <artefacto>.input.r<n>.json
+REVS = {"base": _rev(BASE), "modelos": {BASE: _rev(BASE), **({TEACHER: _rev(TEACHER)} if TEACHER.lower() != "none" else {})},
+        "loras": {a: _rev(repo) for a, repo in _pares}}
+os.environ["MODEL_REVS"] = json.dumps(REVS)
+ENTORNO["modelos"] = REVS
+print("MODELOS", json.dumps(REVS, ensure_ascii=False), flush=True)
 MODE_T = os.environ.get("TEACHER_MODE", "auto")                    # auto: solo si algún requerimiento ya llegó al diseño de API
 def _devolucion_pendiente(r: str) -> bool:
     """D-E1: hay una devolución humana de la versión pendiente, así que la corrección la hará el maestro."""
@@ -51,7 +66,7 @@ def _devolucion_pendiente(r: str) -> bool:
     return False
 
 
-USE_T = TEACHER.lower() != "none" and (MODE_T == "always" or any((ROOT / "data/requerimientos" / r / "output" / "api_design.json").exists()
+USE_T = TEACHER.lower() != "none" and (MODE_T == "always" or os.environ.get("GATES_MODE") == "manual" or any((ROOT / "data/requerimientos" / r / "output" / "api_design.json").exists()
                                                                  or _devolucion_pendiente(r) for r in reqs))
 if not USE_T:   # los agentes del maestro se difieren a la próxima ventana; nunca se sustituye el modelo
     os.environ["PROVIDERS_DOWN"] = "vllm_teacher"
@@ -89,6 +104,18 @@ job = os.environ.get("JOB_ID", "local"); tel_dir = Path("/tmp/tel"); tel_dir.mkd
 resumen = {}
 
 
+import threading                              # noqa: E402
+_LOCK = threading.Lock()                      # commits al dataset en serie (los hilos de requerimientos terminan en paralelo)
+
+
+def _publicar(r: str) -> None:
+    out = ROOT / "data/requerimientos" / r / "output"
+    if out.exists():
+        with _LOCK:
+            api.upload_folder(folder_path=str(out), path_in_repo=f"piloto/{PILOT}/estado/{r}/output", repo_id=RUNS, repo_type="dataset",
+                              commit_message=f"{PILOT} {r} {resumen.get(r)}")
+
+
 def one(r):
     try:
         ctx = Orchestrator(ROOT, Telemetry(tel_dir / f"{r}.jsonl", run_id=job), today=os.environ.get("TODAY")).run(r)
@@ -96,17 +123,18 @@ def one(r):
     except Exception as e:  # noqa: BLE001
         resumen[r] = f"error: {str(e)[:200]}"
     print(r, "→", resumen[r], flush=True)
+    try:        # G3: el estado de cada requerimiento se publica apenas se detiene (gate pendiente, error o fin), sin esperar a los demás
+        _publicar(r)
+    except Exception as e:  # noqa: BLE001
+        print("no se pudo publicar", r, str(e)[:160], flush=True)
 
 
 with ThreadPoolExecutor(max_workers=WORKERS) as ex:
     list(ex.map(one, reqs))
 
 # 3) publicar estado y telemetría
-for r in reqs:
-    out = ROOT / "data/requerimientos" / r / "output"
-    if out.exists():
-        api.upload_folder(folder_path=str(out), path_in_repo=f"piloto/{PILOT}/estado/{r}/output", repo_id=RUNS, repo_type="dataset",
-                          commit_message=f"{PILOT} {r} {resumen.get(r)}")
+ent = Path("/tmp/entorno.json"); ent.write_text(json.dumps(ENTORNO, ensure_ascii=False, indent=1), encoding="utf-8")
+api.upload_file(path_or_fileobj=str(ent), path_in_repo=f"piloto/{PILOT}/entornos/{job}.json", repo_id=RUNS, repo_type="dataset")
 allt = Path("/tmp/tel_all.jsonl"); allt.write_text("".join(p.read_text() for p in tel_dir.glob("*.jsonl")), encoding="utf-8")
 api.upload_file(path_or_fileobj=str(allt), path_in_repo=f"piloto/{PILOT}/telemetria/{job}.jsonl", repo_id=RUNS, repo_type="dataset")
 print("RESUMEN", json.dumps(resumen, ensure_ascii=False, indent=1))

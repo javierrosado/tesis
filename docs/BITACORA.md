@@ -33,6 +33,8 @@ Registro cronológico de actividades, decisiones y dificultades de la implementa
 | 24/11/2026 | Ensayo | Ronda 13 del `ensayo1` (tras D-E3) | Las devoluciones ya llegan a todos los ciclos (telemetría: `devoluciones` 2 y 3) y la puerta de `qa_suite` funcionó (R002: 3 pruebas sin servicio). Pero el contrato del backend limitaba las semillas a 5 filas por tabla: era imposible cumplir las devoluciones que pedían 6 pedidos (R001) o 7 campañas (R002) | **D-E4:** hasta 10 filas de ejemplo por tabla; el prompt indica usar tal cual los datos de ejemplo pedidos en una devolución |
 | 24/11/2026 | Ensayo | Ronda 14 del `ensayo1` (tras D-E4) | R001 pasa 14/14 pruebas y la revisión de código queda "aprobado". R003 falló en el backend: la salida JSON se cortó a ~17 400 caracteres por el límite de 6144 tokens del maestro (9 tablas con más filas de ejemplo) | **D-E5:** salida del maestro hasta 10 240 tokens (si la entrada es muy larga, reintenta con 4096); semillas solo de las tablas que leen los endpoints |
 | 24/11/2026 | Ensayo | Rondas 15 y 16 del `ensayo1` | R001 llegó a la puerta de release con rollback ejecutable. La suite de R002 usaba `@pytest.mark.xfail` sin `import pytest` y fallaba al recolectarse (escaló). El backend de R003 devolvió JSON inválido 3 veces sin que quedara registro del texto | **D-E6:** el sistema agrega `import pytest` cuando la suite usa marcas de pytest; `contract_rejected` guarda el fragmento de salida alrededor del error JSON |
+| 24/11/2026 | Ensayo | Rondas 17 y 18; cierre del `ensayo1` | **R001 desplegado** en `tesis-sandbox` (resultado ok). R002 y R003 quedan en espera de gates. 20 jobs, ≈ USD 8,4 | Ensayo cerrado; informe en `docs/ENSAYO1.md`. Sus resultados no se reportan como resultados del piloto |
+| 24/11/2026 | Diseño | Consola del piloto y selección por niveles | Huecos G1–G4 en el pipeline (spec. de la consola) y falta de un generador de dictamen IA dentro del job | D-P1 a D-P7 (abajo); fase A: G1–G5 y R2 |
 | 30/11–11/12/2026 | F5 | Piloto en preproducción con los 30 requerimientos del squad (protocolo v2) | Pendiente | — |
 
 ## Decisiones metodológicas (resumen)
@@ -55,3 +57,10 @@ Registro cronológico de actividades, decisiones y dificultades de la implementa
 | D-E4 | Hasta 10 filas de ejemplo por tabla en `backend_code` | El límite de 5 impedía cubrir los 6 estados de BR-010 o el historial de 6 campañas de BR-012 |
 | D-E5 | Salida del maestro hasta 10 240 tokens | Con más filas de ejemplo, el backend de R003 superaba 6144 tokens y el JSON quedaba truncado |
 | D-E6 | `import pytest` automático y diagnóstico de JSON inválido | La suite de R002 escaló por un import faltante; el JSON inválido del backend de R003 no se podía diagnosticar |
+| D-P1 | Piloto1 del 14/12 al 23/12/2026 (antes 30/11–11/12); releases 15, 17, 22 y 23/12 | Cerrar G1–G5, la selección de modelos por nivel y la consola antes del congelamiento `v1.0-piloto` |
+| D-P2 | Un solo perfil (el autor: operador, registrador y aprobador); el asesor consulta la evidencia exportada | Simplicidad y trazabilidad del aprobador único |
+| D-P3 | Dictamen IA de las puertas: governance determinista + Qwen3-32B-AWQ dentro del job (G5); autoevaluación declarada en backend, qa y code_review | Claude no participa en la ejecución del piloto |
+| D-P4 | Cierre de ventanas a las 10:00 y 18:00 (Lima) | Dispara la reanudación automática |
+| D-P5 | Modelos de frontera (GLM-5.3, DeepSeek V4) por HF Inference Providers, en el benchmark y en el piloto | Costo y esfuerzo de servir modelos de frontera en 8x H200; se fija proveedor, repo y revisión |
+| D-P6 | La selección de modelos por nivel entra antes del piloto1 | Forma parte del congelamiento |
+| D-P7 | `docs/OPERACION.md` lo valida el autor | Criterio §8.7 de la especificación de la consola |

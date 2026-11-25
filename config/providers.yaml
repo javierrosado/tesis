@@ -73,6 +73,9 @@ providers:
 # D-E1 (23/11/2026, hallazgo del ensayo1): cuando el humano devuelve un artefacto, la corrección la genera el maestro
 # (Qwen3-32B-AWQ). La primera versión sigue siendo del agente (LoRA o base). Los modelos de 8B no seguían las devoluciones.
 correccion_humana: {for_provider: vllm_local, switch_to: vllm_teacher}
+# G5 / D-P3 (24/11/2026): el dictamen IA de cada puerta humana lo genera el maestro del pipeline (no Claude). En backend, qa y
+# code_review el maestro también produce el artefacto: el dictamen se marca autoevaluacion=true y se declara como limitación.
+dictamen: {for_provider: vllm_local, switch_to: vllm_teacher}
 
 overrides:
   # F3: cada agente entrenable usa su adaptador QLoRA, servido por vLLM con el mismo nombre (jobs/run_pipeline_job.py)

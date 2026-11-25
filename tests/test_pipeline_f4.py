@@ -227,3 +227,48 @@ def test_suite_con_marcas_pytest_sin_import():
     t = _con_import_pytest(["@pytest.mark.xfail(reason='x')", "def test_a(client):", "    assert False"])
     assert t.startswith("import pytest")
     assert not _con_import_pytest(["import pytest", "def test_a(client):", "    assert True"]).startswith("import pytest  # noqa")
+
+
+def test_dictamen_ia_en_la_puerta(tmp_path, monkeypatch):
+    """G5: al quedar pendiente una puerta, el pendiente lleva el dictamen IA (governance + maestro), aparte de la decisión."""
+    import shutil
+    import pytest
+    from core.adapters.base import ModelResponse
+    from core.orchestrator import PendingApproval
+    monkeypatch.setenv("PIPELINE_PROVIDER", "prueba_offline")
+
+    class Maestro:
+        name, model = "falso_maestro", "Qwen/Qwen3-32B-AWQ"
+
+        def complete(self, messages, schema=None, tools=None):
+            assert "PO-3" in messages[1]["content"]          # el checklist del rol llega al modelo
+            txt = json.dumps({"recomendacion": "approved", "motivo_sugerido": "PO-3: falta el caso de pedido anulado",
+                              "items": [{"id": "PO-1", "cumple": True, "evidencia": "ok"}, {"id": "PO-3", "cumple": False, "evidencia": "sin anulado"}]})
+            return ModelResponse(text=txt, model_id=self.model, provider=self.name, tokens_in=10, tokens_out=10, latency_ms=1)
+
+    out = ROOT / "data/requerimientos/SIM-P05-R001/output"
+    shutil.rmtree(out, ignore_errors=True)
+    orch = Orchestrator(ROOT, Telemetry(tmp_path / "ev.jsonl", echo=False), seed=1, today="2026-11-24")
+    orch.reg.gates["mode"] = "manual"
+    monkeypatch.setattr(orch.reg, "dictamen_provider", lambda: ("falso_maestro", {}))
+    orch.reg._adapters["falso_maestro"] = Maestro()
+    with pytest.raises(PendingApproval):
+        _run_hasta_pendiente(orch)
+    d = json.loads((out / "pendientes" / "user_story_set.json").read_text(encoding="utf-8"))["dictamen_ia"]
+    assert d["estado"] == "ok" and d["recomendacion"] == "returned"       # un ítem en «No» basta para devolver
+    assert d["checklist"] == "PO" and d["modelo"] == "Qwen/Qwen3-32B-AWQ" and d["autoevaluacion"] is False
+    assert d["discrepancia_governance"] is True and d["items_faltantes"] == ["PO-2", "PO-4", "PO-5"]
+
+
+def _run_hasta_pendiente(orch):
+    from core.orchestrator import PendingApproval
+    ctx = orch.run("SIM-P05-R001")
+    if ctx.get("_estado") == "esperando_aprobacion":
+        raise PendingApproval("pendiente")
+
+
+def test_dictamen_sin_maestro_queda_solo_governance():
+    from core import dictamen
+    d = dictamen.dictaminar(ROOT, None, "release_plan", "release_manager", {"release": {}}, {"veredicto": "aprobado", "hallazgos": []}, {}, {})
+    assert d["estado"] == "solo_governance" and d["recomendacion"] == "approved" and d["checklist"] == "RM"
+    assert [i for i, _ in dictamen.checklist(ROOT)["RM"]] == ["RM-1", "RM-2", "RM-3", "RM-4"]

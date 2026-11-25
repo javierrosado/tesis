@@ -10,7 +10,7 @@ from core.orchestrator import Orchestrator    # noqa: E402
 from core.telemetry import Telemetry          # noqa: E402
 import indicadores                            # noqa: E402
 
-CFG = calendario.config("piloto1")
+CFG = calendario.config("piloto1_plan_inicial")   # calendario original (20/11); el vigente se prueba aparte
 
 
 def test_calendario_piloto1():
@@ -21,6 +21,15 @@ def test_calendario_piloto1():
     assert calendario.dias_release_desde("2026-12-04", CFG) == ["2026-12-09", "2026-12-10"]
     assert calendario.ventana_valida("2026-11-26", "2026-11-24", None)             # sin piloto: martes o jueves
     assert not calendario.ventana_valida("2026-11-25", "2026-11-24", None)
+
+
+def test_calendario_piloto1_vigente():
+    """D-P1 (24/11/2026): piloto1 del 14/12 al 23/12, releases 15, 17, 22 y 23/12; cierre de ventanas 10:00 y 18:00."""
+    c = calendario.config("piloto1")
+    assert (c["inicio"], c["fin"]) == (date(2026, 12, 14), date(2026, 12, 23))
+    assert calendario.dias_release_desde("2026-12-16", c) == ["2026-12-17", "2026-12-22", "2026-12-23"]
+    assert calendario.ventana_valida("2026-12-15", "2026-12-14", c) and not calendario.ventana_valida("2026-12-16", "2026-12-14", c)
+    assert c["cierre_ventanas"] == ["10:00", "18:00"]
 
 
 def test_dias_habiles_saltan_fin_de_semana_y_feriado():

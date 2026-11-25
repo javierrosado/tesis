@@ -1,6 +1,6 @@
 # Checklist de aprobación por tipo de gate (protocolo F5 v2, criterio C7)
 
-- **Estado:** **v1.0, aprobada por el autor el 23/11/2026** (PR #12). Queda fija y **no cambia durante el piloto** (30/11 – 11/12/2026). Un ensayo informal previo no la modifica.
+- **Estado:** **v1.0, aprobada por el autor el 23/11/2026** (PR #12). Queda fija y **no cambia durante el piloto** (14/12 – 23/12/2026; el arranque se movió por D-P1, y RM-2 se actualizó solo en sus fechas). Un ensayo informal previo no la modifica.
 - **Quién lo aplica:** el autor, único aprobador humano de los gates de riesgo alto.
 - **Para qué:** fijar el criterio antes de ver los artefactos y así acotar el sesgo del aprobador único (limitación 4 del Plan V2.7).
 
@@ -62,7 +62,7 @@
 | Ítem | Criterio | Sí / No |
 |---|---|---|
 | RM-1 | La decisión go/no-go es coherente con el checklist y la evidencia del propio plan | |
-| RM-2 | La ventana es un día de release del calendario del piloto (01/12, 03/12, 09/12 o 10/12) | |
+| RM-2 | La ventana es un día de release del calendario del piloto (15/12, 17/12, 22/12 o 23/12) | |
 | RM-3 | El rollback tiene pasos ejecutables en staging | |
 | RM-4 | Los hallazgos de seguridad mayores o menores están en el backlog con su remediación (no bloquean; solo bloquea un crítico abierto) | |
 

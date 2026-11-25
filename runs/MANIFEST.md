@@ -46,3 +46,30 @@
 | 2026-11-20 | F4 | f5-aprobaciones | 6b0090b04fdc5ab3c55bbb55 | l40sx1 | 266 s | ~0,13 | 8B + 5 LoRA (sin maestro) | R001 (`gates-f4`) | 2026-11-24 | devolución de Javier (0,45 h, coincide con IA) → product-analyst rehace → nueva pausa; 2.ª devolución registrada (criterios negativos incumplidos) | ✅ |
 | 2026-11-20 | Selección de modelo | comparacion-modelos | 6b00d0d34fdc5ab3c55c0d56 | l40sx1 | 1727 s | ~0,86 | Qwen3-8B vs Llama-3.1-8B-Instruct vs Mistral-7B-Instruct-v0.3 (sin ajuste) | test v2 (87 casos, 5 agentes) | — | contrato 100 / 98,9 / 93,1 %; aprobación r0 82,8 / 60,9 / 72,4 %; McNemar Qwen vs Llama p = 0,0002, vs Mistral p = 0,039; tokens 1427 / 1070 / 1833; latencia 64 / 44 / 80 s | ✅ |
 | 2026-11-20 | Reproducibilidad | semana10-reproducibilidad | 6b00e7664fdc5ab3c55c332b | l40sx1 | 545 s | ~0,27 | Qwen3-8B base vs adaptador cicd, versiones fijadas (vLLM 0.34.0) | test v2 (9) | 2026 | adaptador **9/9 (100 %) idéntico a F3** (1 805 vs 1 810 tokens; 94,7 vs 94,4 s); base 3/9 (F3: 2/9) → variación de 1 caso por inferencia por lotes | ✅ |
+| 2026-11-23 | Ensayo | ensayo1 | 6b049b11c97b8ed4fcd644c8 | l40sx1 | 0 s | ~0,00 | — | SIM-P05-R001..R003 (`ensayo1`) | — | sin L40S en cola (>6 min) → cancelado, se pasa a a100-large | ⛔ |
+| 2026-11-23 | Ensayo | ensayo1 | 6b049c87c97b8ed4fcd64ae1 | a100-large | 246 s | ~0,17 | 8B + 5 LoRA + maestro | SIM-P05-R001..R003 (`ensayo1`) | — | ronda 1: puertas de diseño (user_story_set) en manual | ✅ |
+| 2026-11-23 | Ensayo | ensayo1 | 6b04a4eaca8b51043c3a564d | a100-large | 248 s | ~0,17 | ídem | SIM-P05-R001..R003 (`ensayo1`) | — | ronda 2: devoluciones registradas; el 8B pierde correcciones entre devoluciones → PR #13 | ⚠️ |
+| 2026-11-23 | Ensayo | ensayo1 | 6b04bd9dca8b51043c3a8586 | a100-large | 250 s | ~0,17 | ídem | SIM-P05-R001..R003 (`ensayo1`) | — | ronda 3: el 8B ignora devoluciones → **D-E1** (corrige el maestro, PR #14) | ⚠️ |
+| 2026-11-23 | Ensayo | ensayo1 | 6b04c334c97b8ed4fcd69f0c | a100-large | 255 s | ~0,18 | ídem + D-E1 | SIM-P05-R001..R003 (`ensayo1`) | — | ronda 4: devoluciones aplicadas por el maestro | ✅ |
+| 2026-11-23 | Ensayo | ensayo1 | 6b04c67cca8b51043c3a9751 | a100-large | 391 s | ~0,27 | ídem | SIM-P05-R001..R003 (`ensayo1`) | — | ronda 5: puertas de arquitectura y seguridad | ✅ |
+| 2026-11-23 | Ensayo | ensayo1 | 6b04c9e7ca8b51043c3a9c6b | a100-large | 428 s | ~0,30 | ídem | SIM-P05-R001..R003 (`ensayo1`) | — | ronda 6: aprobaciones SA/SEC/US | ✅ |
+| 2026-11-23 | Ensayo | ensayo1 | 6b04cbf4ca8b51043c3aa065 | a100-large | 394 s | ~0,27 | ídem | SIM-P05-R001..R003 (`ensayo1`) | — | ronda 7: devoluciones SEC/DA/SA | ✅ |
+| 2026-11-23 | Ensayo | ensayo1 | 6b04cf8bc97b8ed4fcd6b82f | a100-large | 262 s | ~0,18 | ídem | SIM-P05-R001..R003 (`ensayo1`) | — | ronda 8: aprobaciones SEC/DA; devolución SA (integraciones) | ✅ |
+| 2026-11-24 | Ensayo | ensayo1 | 6b04d47ac97b8ed4fcd6c50f | a100-large | 410 s | ~0,28 | ídem | SIM-P05-R001..R003 (`ensayo1`) | — | ronda 8b: llegada al bucle de calidad | ✅ |
+| 2026-11-24 | Ensayo | ensayo1 | 6b04e395ca8b51043c3ad20c | a100-large | 810 s | ~0,56 | ídem | SIM-P05-R001..R003 (`ensayo1`) | — | ronda 9: qa_suite/backend aprobados por riesgo bajo con 14 pruebas fallidas | ⚠️ |
+| 2026-11-24 | Ensayo | ensayo1 | 6b04e7c5c97b8ed4fcd6f215 | a100-large | 810 s | ~0,56 | ídem | SIM-P05-R001..R003 (`ensayo1`) | — | ronda 10: R001 2/14; pruebas tautológicas en R002 | ⚠️ |
+| 2026-11-24 | Ensayo | ensayo1 | 6b04eb84c97b8ed4fcd6f840 | a100-large | 630 s | ~0,44 | ídem | SIM-P05-R001..R003 (`ensayo1`) | — | ronda 11: los ciclos automáticos deshacen la devolución (R001 0/14) → **D-E2** (PR #15) | ❌ |
+| 2026-11-24 | Ensayo | ensayo1 | 6b04fa02ca8b51043c3af828 | a100-large | 832 s | ~0,58 | ídem + D-E2 | SIM-P05-R001..R003 (`ensayo1`) | — | ronda 12: R001 8/14; errores sin problem+json → **D-E3** (PR #16) | ⚠️ |
+| 2026-11-24 | Ensayo | ensayo1 | 6b05b10e1460ffe1d5e88f3e | a100-large | 629 s | ~0,44 | ídem + D-E3 | SIM-P05-R001..R003 (`ensayo1`) | — | ronda 13: semillas limitadas a 5 filas → **D-E4** (PR #17) | ⚠️ |
+| 2026-11-24 | Ensayo | ensayo1 | 6b05b9091460ffe1d5e89def | a100-large | 1087 s | ~0,75 | ídem + D-E4 | SIM-P05-R001..R003 (`ensayo1`) | — | ronda 14: **R001 14/14**; backend R003 truncado a 6144 tokens → **D-E5** (PR #18) | ⚠️ |
+| 2026-11-24 | Ensayo | ensayo1 | 6b05be81d0582cfbbefca322 | a100-large | 1659 s | ~1,15 | ídem + D-E5 | SIM-P05-R001..R003 (`ensayo1`) | — | ronda 15: R001 en release_plan; suite R002 sin import pytest → **D-E6** (PR #19) | ⚠️ |
+| 2026-11-24 | Ensayo | ensayo1 | 6b05ebfed0582cfbbefcf1eb | a100-large | 1101 s | ~0,76 | ídem + D-E6 | SIM-P05-R001..R003 (`ensayo1`) | — | ronda 16: release R001 con rollback ejecutable; R003 JSON inválido | ⚠️ |
+| 2026-11-24 | Ensayo | ensayo1 | 6b05f737d0582cfbbefd02b3 | a100-large | 1096 s | ~0,76 | ídem | SIM-P05-R001..R003 (`ensayo1`) | — | ronda 17: **R001 desplegado** (DEP-SIM-P05-R001, Actions 45489360359, ok); R002 BR-012 correcta, semillas desalineadas | ✅ |
+| 2026-11-24 | Ensayo | ensayo1 | 6b0603591460ffe1d5e92522 | a100-large | 521 s | ~0,36 | ídem | SIM-P05-R001..R003 (`ensayo1`) | — | ronda 18: R002 y R003 en espera de gates; ensayo cerrado | ✅ |
+
+> **ensayo1 (23–24/11/2026):** 20 jobs, 12059 s de A100 (≈ USD 8,4). Ensayo informal previo al piloto; sus resultados **no** se reportan como resultados del piloto. Hallazgos en `docs/ENSAYO1.md`.
+
+## Desviaciones piloto1
+
+| tag | fecha | cambio | motivo | aplica_desde | afectados |
+|---|---|---|---|---|---|

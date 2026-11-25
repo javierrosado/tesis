@@ -13,7 +13,8 @@ class AnthropicAdapter:
         key = os.environ.get(cfg.get("api_key_env", "ANTHROPIC_API_KEY"))
         if not key:
             raise RuntimeError("falta ANTHROPIC_API_KEY (adaptador de desarrollo)")
-        self.client = anthropic.Anthropic(api_key=key)
+        ws = os.environ.get(cfg.get("workspace_env", "ANTHROPIC_WORKSPACE_ID"))   # claves no ligadas a un workspace
+        self.client = anthropic.Anthropic(api_key=key, default_headers={"anthropic-workspace-id": ws} if ws else None)
         self.model = cfg["model"]
         self.max_tokens = cfg.get("max_tokens", 4096)
         self.temperature = cfg.get("temperature", 0.2)

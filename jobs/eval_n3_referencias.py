@@ -1,6 +1,6 @@
 # /// script
 # requires-python = ">=3.11"
-# dependencies = ["huggingface_hub==2.4.0", "jsonschema==4.26.0", "openapi-spec-validator==0.9.0", "PyYAML", "fastapi==0.136.3", "httpx", "pytest==9.2.0", "ruff==0.17.6", "bandit==1.9.4"]
+# dependencies = ["huggingface_hub==2.4.0", "jsonschema==4.26.0", "openapi-spec-validator==0.9.0", "PyYAML", "fastapi==0.136.3", "httpx", "pytest==9.2.0", "ruff==0.17.6", "bandit==1.9.4", "anthropic"]
 # ///
 """eval_n3 · paso 3 (mitad de frontera): servicio limpio + pruebas de aceptación de referencia, escritos por los modelos de
 frontera vía HF Inference Providers (solo CPU; sin GPU). La otra mitad la escribe Claude (uso 3 del documento de selección).
@@ -9,7 +9,8 @@ Reparto (eval_n3/README §3): de los casos con entrada de backend congelada, por
 7 DeepSeek V4-Pro. Un caso entra solo si todas sus pruebas pasan contra su servicio limpio (hasta 4 intentos con el detalle
 de los fallos).
 
-Variables: BRANCH, RUNS_REPO (tesis-runs, con runs/eval_n3/casos/), HF_TOKEN."""
+Variables: BRANCH, RUNS_REPO (tesis-runs, con runs/eval_n3/casos/), HF_TOKEN, ANTHROPIC_API_KEY (la mitad de Claude; sin ella esos casos
+quedan pendientes)."""
 import hashlib, io, json, os, sys, tarfile, urllib.request
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -49,9 +50,13 @@ SISTEMA = ("Eres un desarrollador senior. Escribes la implementación de referen
 def generar(req: str) -> dict:
     prov = autoria[req]
     if prov == "claude":
-        return {"req_id": req, "autor": "claude", "estado": "pendiente_claude"}
+        if not os.environ.get("ANTHROPIC_API_KEY"):
+            return {"req_id": req, "autor": "claude", "estado": "pendiente_claude"}
+        prov = "claude_ref"                     # uso 3: Claude por API de pago por uso, model_id fijado
     entrada = json.loads((src / req / "entradas" / "backend-developer-agent.json").read_text(encoding="utf-8"))
-    name, cfg = prov, dict(reg.providers_cfg["providers"][prov]); cfg["reasoning_effort"] = "high"
+    name, cfg = prov, dict(reg.providers_cfg["providers"][prov])
+    if cfg.get("acepta_reasoning_effort"):
+        cfg["reasoning_effort"] = "high"
     ad = build_adapter(name, cfg, ROOT)
     msgs = [{"role": "system", "content": SISTEMA}, {"role": "user", "content": "## Entrada\n```json\n" + json.dumps(entrada, ensure_ascii=False, indent=1) + "\n```"}]
     for intento in range(4):
@@ -63,14 +68,14 @@ def generar(req: str) -> dict:
             files = sandbox.render_app(entrada["api_design"], entrada["data_model"], back)
             rt = sandbox.run_tests(files, qa)
             if rt["collected"] >= 6 and rt["passed"] == rt["collected"]:
-                return {"req_id": req, "autor": prov, "modelo": cfg["model"], "estado": "ok", "intentos": intento + 1,
+                return {"req_id": req, "autor": autoria[req], "proveedor": prov, "modelo": cfg["model"], "estado": "ok", "intentos": intento + 1,
                         "pruebas": rt["collected"], "servicio_limpio": back, "pruebas_aceptacion": qa}
             fallos = "\n".join(f"- {f['prueba']}: {f['detalle'][:300]}" for f in rt["fallos"][:8]) or f"recolectadas {rt['collected']} (mínimo 6)"
             msgs = msgs[:2] + [{"role": "assistant", "content": r.text[:20000]},
                                {"role": "user", "content": f"Las pruebas no pasan contra tu servicio:\n{fallos}\nCorrige el servicio o las pruebas (sin bajar la exigencia) y responde de nuevo el JSON completo."}]
         except Exception as e:  # noqa: BLE001
             msgs = msgs[:2] + [{"role": "user", "content": f"Error: {str(e)[:400]}. Responde de nuevo el JSON completo."}]
-    return {"req_id": req, "autor": prov, "estado": "descartado"}
+    return {"req_id": req, "autor": autoria[req], "proveedor": prov, "estado": "descartado"}
 
 
 with ThreadPoolExecutor(max_workers=6) as ex:

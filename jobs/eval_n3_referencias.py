@@ -11,7 +11,7 @@ de los fallos).
 
 Variables: BRANCH, RUNS_REPO (tesis-runs, con runs/eval_n3/casos/), HF_TOKEN, ANTHROPIC_API_KEY (la mitad de Claude; sin ella esos casos
 quedan pendientes)."""
-import hashlib, io, json, os, sys, tarfile, urllib.request
+import hashlib, io, json, os, sys, tarfile, textwrap, urllib.request
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
@@ -40,11 +40,20 @@ SCHEMA = {"title": "referencia", "type": "object", "additionalProperties": False
 SISTEMA = ("Eres un desarrollador senior. Escribes la implementación de referencia de un servicio (cuerpo de cada handler, en "
            "Python, con las firmas dadas) y sus pruebas de aceptación con pytest. Reglas: (1) los handlers usan solo DB (dict "
            "tabla → lista de filas), HTTPException y los parámetros de su firma; los errores se lanzan con "
-           "HTTPException(status_code=..., detail='<id del catálogo de errores>'); no importes módulos; (2) las semillas "
+           "HTTPException(status_code=..., detail='<id del catálogo de errores>'); no importes módulos; en `lineas` va solo el "
+           "cuerpo de la función, sin la línea `def` (la firma la pone el sistema); (2) las semillas "
            "usan exactamente las tablas y columnas dadas; (3) cada prueba usa las fixtures `client` (TestClient) y `db`, llama "
            "a un endpoint con client y verifica status y cuerpo; las pruebas referencian datos de las semillas por su id "
            "(no por posición) y cubren los casos felices, los errores del catálogo y las reglas de negocio; (4) entre 6 y 12 "
            "pruebas. Responde solo con el JSON.")
+
+
+def _cuerpo(lineas: list[str]) -> list[str]:
+    """Corrida 6b06ef0c (25/11): los modelos repetían la línea `def _ep_xxx(...)` dentro de `lineas`; render_app la envolvía en
+    otra función, el handler real devolvía None y las 28 referencias se descartaron. Se quita esa línea y se des-indenta."""
+    if lineas and lineas[0].lstrip().startswith("def "):
+        return textwrap.dedent("\n".join(lineas[1:])).splitlines()
+    return lineas
 
 
 def generar(req: str) -> dict:
@@ -59,11 +68,12 @@ def generar(req: str) -> dict:
         cfg["reasoning_effort"] = "high"
     ad = build_adapter(name, cfg, ROOT)
     msgs = [{"role": "system", "content": SISTEMA}, {"role": "user", "content": "## Entrada\n```json\n" + json.dumps(entrada, ensure_ascii=False, indent=1) + "\n```"}]
+    ultimo = ""
     for intento in range(4):
         try:
             r = ad.complete(msgs, SCHEMA)
             d = json.loads(r.text)
-            back = {"req_id": req, "handlers": d["handlers"], "semillas": d["semillas"]}
+            back = {"req_id": req, "handlers": [{**h, "lineas": _cuerpo(h["lineas"])} for h in d["handlers"]], "semillas": d["semillas"]}
             qa = {"req_id": req, "suites": d["suites"]}
             files = sandbox.render_app(entrada["api_design"], entrada["data_model"], back)
             rt = sandbox.run_tests(files, qa)
@@ -71,11 +81,13 @@ def generar(req: str) -> dict:
                 return {"req_id": req, "autor": autoria[req], "proveedor": prov, "modelo": cfg["model"], "estado": "ok", "intentos": intento + 1,
                         "pruebas": rt["collected"], "servicio_limpio": back, "pruebas_aceptacion": qa}
             fallos = "\n".join(f"- {f['prueba']}: {f['detalle'][:300]}" for f in rt["fallos"][:8]) or f"recolectadas {rt['collected']} (mínimo 6)"
+            ultimo = f"intento {intento + 1}: {rt['passed']}/{rt['collected']}\n{fallos}"
             msgs = msgs[:2] + [{"role": "assistant", "content": r.text[:20000]},
                                {"role": "user", "content": f"Las pruebas no pasan contra tu servicio:\n{fallos}\nCorrige el servicio o las pruebas (sin bajar la exigencia) y responde de nuevo el JSON completo."}]
         except Exception as e:  # noqa: BLE001
+            ultimo = f"intento {intento + 1}: {type(e).__name__}: {str(e)[:400]}"
             msgs = msgs[:2] + [{"role": "user", "content": f"Error: {str(e)[:400]}. Responde de nuevo el JSON completo."}]
-    return {"req_id": req, "autor": autoria[req], "proveedor": prov, "estado": "descartado"}
+    return {"req_id": req, "autor": autoria[req], "proveedor": prov, "estado": "descartado", "ultimo_fallo": ultimo[:3000]}
 
 
 with ThreadPoolExecutor(max_workers=6) as ex:

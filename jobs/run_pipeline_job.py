@@ -19,13 +19,15 @@ BRANCH = os.environ.get("BRANCH", "main"); PILOT = os.environ["PILOT"]; RUNS = o
 BASE = os.environ.get("BASE", "Qwen/Qwen3-8B"); WORKERS = int(os.environ.get("WORKERS", "8"))
 url = f"https://github.com/javierrosado/tesis/archive/refs/heads/{BRANCH}.tar.gz"
 _auth = {"Authorization": "token " + os.environ["GITHUB_TOKEN"]} if os.environ.get("GITHUB_TOKEN") else {}  # repo privado desde el 23/11/2026
-tarfile.open(fileobj=io.BytesIO(urllib.request.urlopen(urllib.request.Request(url, headers=_auth)).read())).extractall("/tmp", filter="data")
-ROOT = Path(f"/tmp/tesis-{BRANCH.replace('/', '-')}"); os.chdir(ROOT); sys.path.insert(0, str(ROOT))
+_tar = tarfile.open(fileobj=io.BytesIO(urllib.request.urlopen(urllib.request.Request(url, headers=_auth)).read())); _tar.extractall("/tmp", filter="data")
+ROOT = Path("/tmp") / _tar.getnames()[0].split("/")[0]; os.chdir(ROOT); sys.path.insert(0, str(ROOT))  # nombre real de la carpeta (GitHub quita la 'v' inicial de ramas como v2-*)
 from core.envinfo import report as _entorno  # noqa: E402
 ENTORNO = _entorno({"job": os.environ.get("JOB_ID", "local"), "branch": BRANCH})
 from huggingface_hub import HfApi, snapshot_download   # noqa: E402
 api = HfApi()
-reqs = sorted(p.name for p in (ROOT / "data/requerimientos").iterdir() if (p / "input").exists()) if os.environ.get("ALL") == "1" else os.environ["REQS"].split(",")
+PREP = os.environ.get("PREPARAR_EVAL")          # v2 · eval_n3: genera N requerimientos SIM-E0x con el maestro antes de correr
+reqs = sorted(p.name for p in (ROOT / "data/requerimientos").iterdir() if (p / "input").exists()) if os.environ.get("ALL") == "1" \
+    else [] if PREP else os.environ["REQS"].split(",")
 
 # 1) estado previo del piloto
 try:
@@ -69,7 +71,7 @@ def _devolucion_pendiente(r: str) -> bool:
     return False
 
 
-USE_T = TEACHER.lower() != "none" and (MODE_T == "always" or os.environ.get("GATES_MODE") == "manual" or any((ROOT / "data/requerimientos" / r / "output" / "api_design.json").exists()
+USE_T = TEACHER.lower() != "none" and (MODE_T == "always" or bool(PREP) or os.environ.get("GATES_MODE") == "manual" or any((ROOT / "data/requerimientos" / r / "output" / "api_design.json").exists()
                                                                  or _devolucion_pendiente(r) for r in reqs))
 if not USE_T:   # los agentes del maestro se difieren a la próxima ventana; nunca se sustituye el modelo
     os.environ["PROVIDERS_DOWN"] = "vllm_teacher"
@@ -99,6 +101,10 @@ if USE_T:   # segundo servidor: maestro para backend / QA / code-review (config/
                 print(open("/tmp/vllm_t.log").read()[-4000:]); sys.exit("vLLM maestro no arrancó")
             time.sleep(10)
     print("vLLM maestro listo:", TEACHER, flush=True)
+if PREP:
+    _p = subprocess.run([sys.executable, "scripts/eval_n3/preparar_brs.py", "--n", PREP, "--modelo", TEACHER], capture_output=True, text=True)
+    reqs = [x for x in _p.stdout.split() if x.startswith("SIM-E")]
+    print("eval_n3: requerimientos preparados", len(reqs), _p.stderr[-800:], flush=True)
 os.environ["PIPELINE_PROVIDER"] = "vllm_local"
 
 from core.orchestrator import Orchestrator   # noqa: E402
@@ -113,6 +119,10 @@ _LOCK = threading.Lock()                      # commits al dataset en serie (los
 
 def _publicar(r: str) -> None:
     out = ROOT / "data/requerimientos" / r / "output"
+    if PREP and (out.parent / "input").exists():   # eval_n3: los requerimientos se generan en el job; se guarda su entrada
+        with _LOCK:
+            api.upload_folder(folder_path=str(out.parent / "input"), path_in_repo=f"piloto/{PILOT}/estado/{r}/input", repo_id=RUNS,
+                              repo_type="dataset", commit_message=f"{PILOT} {r} input")
     if out.exists():
         with _LOCK:
             api.upload_folder(folder_path=str(out), path_in_repo=f"piloto/{PILOT}/estado/{r}/output", repo_id=RUNS, repo_type="dataset",

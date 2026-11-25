@@ -14,8 +14,8 @@ BRANCH = os.environ.get("BRANCH", "f3-qlora"); TEACHER = os.environ.get("TEACHER
 AGENT = os.environ["AGENT"]; SRC = os.environ["SRC_REPO"]; DST = os.environ["DST_REPO"]; WORKERS = int(os.environ.get("WORKERS", "16"))
 url = f"https://github.com/javierrosado/tesis/archive/refs/heads/{BRANCH}.tar.gz"
 _auth = {"Authorization": "token " + os.environ["GITHUB_TOKEN"]} if os.environ.get("GITHUB_TOKEN") else {}  # repo privado desde el 23/11/2026
-tarfile.open(fileobj=io.BytesIO(urllib.request.urlopen(urllib.request.Request(url, headers=_auth)).read())).extractall("/tmp", filter="data")
-ROOT = Path(f"/tmp/tesis-{BRANCH.replace('/', '-')}"); os.chdir(ROOT); sys.path.insert(0, str(ROOT))
+_tar = tarfile.open(fileobj=io.BytesIO(urllib.request.urlopen(urllib.request.Request(url, headers=_auth)).read())); _tar.extractall("/tmp", filter="data")
+ROOT = Path("/tmp") / _tar.getnames()[0].split("/")[0]; os.chdir(ROOT); sys.path.insert(0, str(ROOT))  # nombre real de la carpeta (GitHub quita la 'v' inicial de ramas como v2-*)
 srv = subprocess.Popen([sys.executable, "-m", "vllm.entrypoints.openai.api_server", "--model", TEACHER, "--port", "8000",
                         "--max-model-len", "20000", "--gpu-memory-utilization", "0.92", "--max-num-seqs", "48"],
                        stdout=open("/tmp/vllm.log", "w"), stderr=subprocess.STDOUT)

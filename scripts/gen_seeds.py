@@ -35,6 +35,7 @@ def main():
     ap.add_argument("--n", type=int, default=200); ap.add_argument("--seed", type=int, default=2026)
     ap.add_argument("--out", default="seeds.jsonl")
     ap.add_argument("--start", type=int, default=0, help="índice inicial: lotes disjuntos de semillas (R{start+1}…)")
+    ap.add_argument("--prefijo", default="SIM-T0", help="proyecto: SIM-T0 entrenamiento (F2-A), SIM-E0 evaluación N3 (v2)")
     a = ap.parse_args()
     rng = random.Random(a.seed)
     cat = {}
@@ -50,7 +51,7 @@ def main():
             area, brs, solicitante, rol = AREAS[i % len(AREAS)]
             k = rng.choice([1, 1, 2, 2, 3]); reglas = sorted(rng.sample(brs, min(k, len(brs))))
             tipo = rng.choices([t for t, _ in TIPOS], [w for _, w in TIPOS])[0]
-            proyecto = f"SIM-T0{1 + i % 5}"
+            proyecto = f"{a.prefijo}{1 + i % 5}"
             req_id = f"{proyecto}-R{i + 1:03d}"
             assert req_id not in pilot_titles
             f.write(json.dumps({"req_id": req_id, "proyecto": proyecto, "area": area, "tipo": tipo, "solicitante": solicitante, "rol": rol,

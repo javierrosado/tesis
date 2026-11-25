@@ -20,7 +20,7 @@ class ModelPort:
         if missing:
             raise ContractError(f"{agent.name}: el proveedor {self.adapter.name} no satisface {missing}")
         schema = agent.output_schema
-        last_err, totals = None, {"tokens_in": 0, "tokens_out": 0, "latency_ms": 0, "attempts": 0}
+        last_err, totals = None, {"tokens_in": 0, "tokens_out": 0, "latency_ms": 0, "attempts": 0, "costo_usd": 0.0}
         for attempt in range(self.max_retries + 1):
             route = {"role": "system", "name": "__route", "content": "", "agent": agent.name, "req_id": req_id, "attempt": attempt, "variant": variant}
             try:
@@ -32,11 +32,12 @@ class ModelPort:
                 continue
             totals["tokens_in"] += r.tokens_in; totals["tokens_out"] += r.tokens_out
             totals["latency_ms"] += r.latency_ms; totals["attempts"] = attempt + 1
+            totals["costo_usd"] += float((r.meta or {}).get("costo_usd") or 0)      # v2: proveedores de pago por uso
             try:
                 out = json.loads(_strip_fences(r.text))
                 jsonschema.validate(out, schema)
                 self.telemetry.emit(event="agent_completed", agent=agent.name, req_id=req_id, attempt=attempt,
-                                    provider=r.provider, model_id=r.model_id, **{k: totals[k] for k in ("tokens_in", "tokens_out", "latency_ms")})
+                                    provider=r.provider, model_id=r.model_id, **{k: totals[k] for k in ("tokens_in", "tokens_out", "latency_ms", "costo_usd")})
                 return out, {**totals, "provider": r.provider, "model_id": r.model_id}
             except (json.JSONDecodeError, jsonschema.ValidationError) as e:
                 last_err = _short(e)

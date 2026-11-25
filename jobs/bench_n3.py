@@ -13,7 +13,10 @@ Métricas por agente (eval_n3/README §1):
 - backend-developer: pass@1 = todas las pruebas de aceptación del caso pasan con las semillas de referencia;
 - code-review: recall de defectos sembrados (hallazgo crítico o mayor dentro del handler del defecto) y falsos positivos
   sobre el servicio limpio.
-Pares de modelos sobre los mismos casos: McNemar exacto bilateral. Costo por llamada (usage.cost) y latencia.
+Pares de modelos sobre los mismos casos: McNemar exacto bilateral (binarias) y Wilcoxon pareado (tasa de pruebas del
+backend y puntaje del juez). Humo 6b073424 (25/11): governance aprueba al 100 % en los 4 modelos y pass@1 queda en 0 %, así que
+las métricas principales pasan a ser el juez 1–5 (SA, data-model, security; JUEZ=hf_qwen36, no califica a Claude), la tasa de
+pruebas que pasan (backend) y los falsos positivos y la precisión de localización (code-review). Costo por llamada (usage.cost) y latencia.
 Salida: runs/bench_n3/<job>/ en RUNS_REPO. Variables: BRANCH, RUNS_REPO, MODELOS, AGENTES, MAX_CASOS."""
 import io, itertools, json, os, statistics, sys, tarfile, threading, urllib.request
 from concurrent.futures import ThreadPoolExecutor
@@ -76,6 +79,34 @@ def llamar(m, agente, caso, payload, br, variante=""):
     return out, st
 
 
+JUEZ = os.environ.get("JUEZ", "hf_qwen36")   # eval_n3/README §4: juez que no es candidato N3; no califica artefactos de Claude
+RUBRICA = ("Eres un revisor técnico senior. Califica de 1 a 5 el artefacto del agente {agente} frente a sus entradas, con "
+           "estos criterios: (a) completitud: cubre todo lo que piden las entradas; (b) coherencia: no contradice ni inventa "
+           "respecto de las entradas; (c) especificidad: decisiones concretas y verificables, no genéricas; (d) utilidad: el "
+           "siguiente agente puede trabajar con él sin volver a preguntar. 5 = listo para producción; 3 = usable con ajustes; "
+           "1 = no sirve. Responde solo con JSON: {{\"puntaje\": <1-5>, \"criterios\": {{\"completitud\": <1-5>, "
+           "\"coherencia\": <1-5>, \"especificidad\": <1-5>, \"utilidad\": <1-5>}}, \"motivo\": \"<una o dos frases>\"}}")
+
+
+def juzgar(agente: str, payload: dict, out: dict) -> dict:
+    ad = build_adapter(f"juez@{JUEZ}", dict(reg.providers_cfg["providers"][JUEZ]), ROOT)
+    msgs = [{"role": "system", "content": RUBRICA.format(agente=agente)},
+            {"role": "user", "content": "## Entradas\n```json\n" + json.dumps(payload, ensure_ascii=False)[:60000] +
+             "\n```\n## Artefacto\n```json\n" + json.dumps(out, ensure_ascii=False)[:60000] + "\n```"}]
+    for _ in range(3):
+        r = ad.complete(msgs)
+        txt = r.text.strip()
+        i, j = txt.find("{"), txt.rfind("}")
+        try:
+            d = json.loads(txt[i:j + 1])
+            if 1 <= int(d["puntaje"]) <= 5:
+                return {"puntaje": int(d["puntaje"]), "criterios": d.get("criterios"), "motivo": str(d.get("motivo", ""))[:300],
+                        "costo_usd": float((r.meta or {}).get("costo_usd") or 0)}
+        except Exception:  # noqa: BLE001
+            msgs = msgs + [{"role": "assistant", "content": txt[:4000]}, {"role": "user", "content": "Responde solo con el JSON pedido."}]
+    return {"puntaje": None, "error": "juez sin JSON válido"}
+
+
 def evaluar(job):
     m, agente, caso = job
     d = src / caso
@@ -106,6 +137,12 @@ def evaluar(job):
         else:
             v, _, f5 = governance.review(reg.agents[agente], out, ctx, 0)
             r.update(aprobado_r0=v["veredicto"] == "aprobado", hallazgos=[h["regla"] for h in v["hallazgos"]])
+            if m != "claude_ref" and JUEZ:
+                try:
+                    jz = juzgar(agente, payload, out)
+                except Exception as e:  # noqa: BLE001
+                    jz = {"puntaje": None, "error": str(e)[:200]}
+                r["juez"] = jz; r["costo_usd"] = round((r.get("costo_usd") or 0) + jz.get("costo_usd", 0), 6)
     except Exception as e:  # noqa: BLE001
         r.update(contrato=False, error=str(e)[:300], aprobado_r0=False, pass_at_1=False)
     return r
@@ -139,7 +176,10 @@ def evaluar_revision(m, caso, d, br, r):
             if defecto is None:
                 detalle.append({"variante": vid, "falsos_positivos": sum(h.get("severidad") in ("critico", "mayor") for h in hall)})
             else:
-                detalle.append({"variante": vid, "tipo": defecto["tipo"], "detectado": _detecta(files, defecto["endpoint"], hall)})
+                graves = [h for h in hall if h.get("severidad") in ("critico", "mayor")]
+                en_handler = sum(_detecta(files, defecto["endpoint"], [h]) for h in graves)
+                detalle.append({"variante": vid, "tipo": defecto["tipo"], "detectado": _detecta(files, defecto["endpoint"], hall),
+                                "graves": len(graves), "graves_en_handler": en_handler})
         except Exception as e:  # noqa: BLE001
             detalle.append({"variante": vid, "error": str(e)[:200], "detectado": False})
     defs = [x for x in detalle if x["variante"] != "limpio"]
@@ -173,11 +213,20 @@ for a in AGENTES:
             for tp in ("logica", "seguridad"):
                 xs = [x for f in fs for x in f.get("detalle", []) if x.get("tipo") == tp]
                 por_tipo[tp] = round(100 * sum(x.get("detectado", False) for x in xs) / len(xs), 1) if xs else None
+            xs = [x for f in fs for x in f.get("detalle", []) if x.get("tipo")]
+            gr = sum(x.get("graves", 0) for x in xs)
+            t["precision_localizacion_pct"] = round(100 * sum(x.get("graves_en_handler", 0) for x in xs) / gr, 1) if gr else None
             t.update(defectos=dd, detectados=det, recall_pct=round(100 * det / dd, 1) if dd else None, recall_por_tipo_pct=por_tipo,
                      falsos_positivos_media=round(statistics.mean([f["falsos_positivos"] for f in fs if f.get("falsos_positivos") is not None] or [0]), 2))
         else:
             k = METRICA.get(a) or "aprobado_r0"
             t[f"{k}_%"] = round(100 * sum(bool(f.get(k)) for f in fs) / len(fs), 1)
+            if a == "backend-developer-agent":     # humo 6b073424: pass@1 = 0 en todos (pruebas más estrictas que la entrada)
+                t["tasa_pruebas_media_%"] = round(100 * statistics.mean([f.get("tasa", 0) for f in fs]), 1)
+            else:
+                pj = [f["juez"]["puntaje"] for f in fs if (f.get("juez") or {}).get("puntaje")]
+                t["juez_media"] = round(statistics.mean(pj), 2) if pj else None
+                t["juez_n"] = len(pj)
         if a in ("backend-developer-agent", "code-review-agent"):    # eval_n3/README §3.1: sesgo de autoría (19 Claude / 9 frontera)
             est = {}
             for au in sorted({f.get("autor_ref") or "?" for f in fs}):
@@ -206,6 +255,19 @@ for a in AGENTES:
         p = min(1.0, 2 * stats.binom.cdf(min(b, c_), b + c_, 0.5)) if b + c_ else 1.0
         pares[f"{m1} vs {m2}"] = {"n": len(com), f"solo_{m1}": b, f"solo_{m2}": c_, "p": round(float(p), 4)}
     tabla[a]["mcnemar"] = pares
+    if a in ("backend-developer-agent", "solution-architect-agent", "data-model-agent", "security-compliance-agent"):
+        val = (lambda f: f.get("tasa")) if a == "backend-developer-agent" else (lambda f: (f.get("juez") or {}).get("puntaje"))
+        wx = {}
+        for m1, m2 in itertools.combinations(MODELOS, 2):
+            v1 = {f["caso"]: val(f) for f in filas if f["agente"] == a and f["modelo"] == m1 and val(f) is not None}
+            v2 = {f["caso"]: val(f) for f in filas if f["agente"] == a and f["modelo"] == m2 and val(f) is not None}
+            com = sorted(set(v1) & set(v2)); dif = [v1[c] - v2[c] for c in com]
+            if len(com) < 5 or not any(dif):
+                wx[f"{m1} vs {m2}"] = {"n": len(com), "p": None if len(com) < 5 else 1.0}
+                continue
+            res = stats.wilcoxon(dif, zero_method="zsplit")
+            wx[f"{m1} vs {m2}"] = {"n": len(com), "mediana_dif": round(float(statistics.median(dif)), 3), "p": round(float(res.pvalue), 4)}
+        tabla[a]["wilcoxon"] = wx
 
 d = Path("/tmp/bench"); d.mkdir(exist_ok=True)
 (d / "entorno.json").write_text(json.dumps(ENTORNO, ensure_ascii=False, indent=1), encoding="utf-8")

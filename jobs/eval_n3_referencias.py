@@ -33,6 +33,11 @@ SOLO = [c for c in os.environ.get("CASOS", "").split(",") if c]           # reha
 orden = sorted(casos, key=lambda r: hashlib.sha256(f"autoria:{r}".encode()).hexdigest())
 n = len(orden); n_claude = round(n / 2); n_glm = round((n - n_claude) * 8 / 15)
 autoria = {r: "claude" if i < n_claude else "hf_glm53" if i < n_claude + n_glm else "hf_dsv4pro" for i, r in enumerate(orden)}
+# Reasignación declarada (eval_n3/README §3): un caso que su autor no logró en 6 intentos pasa a otro autor, p. ej.
+# REASIGNAR='{"SIM-E03-R003": "claude"}'; queda en autoria.json como reasignado
+REASIGNADO = json.loads(os.environ.get("REASIGNAR", "{}"))
+for _r, _a in REASIGNADO.items():
+    autoria[_r] = _a
 
 BACK = reg.agents["backend-developer-agent"].output_schema
 QA = reg.agents["qa-automation-agent"].output_schema
@@ -83,7 +88,8 @@ def generar(req: str) -> dict:
             files = sandbox.render_app(entrada["api_design"], entrada["data_model"], back)
             rt = sandbox.run_tests(files, qa)
             if rt["collected"] >= 6 and rt["passed"] == rt["collected"]:
-                return {"req_id": req, "autor": autoria[req], "proveedor": prov, "modelo": cfg["model"], "estado": "ok", "intentos": intento + 1,
+                return {"req_id": req, "autor": autoria[req], **({"reasignado": True} if req in REASIGNADO else {}),
+                        "proveedor": prov, "modelo": cfg["model"], "estado": "ok", "intentos": intento + 1,
                         "pruebas": rt["collected"], **gasto, "servicio_limpio": back, "pruebas_aceptacion": qa}
             fallos = "\n".join(f"- {f['prueba']}: {f['detalle'][:300]}" for f in rt["fallos"][:8]) or f"recolectadas {rt['collected']} (mínimo 6)"
             ultimo = f"intento {intento + 1}: {rt['passed']}/{rt['collected']}\n{fallos}"

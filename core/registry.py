@@ -56,11 +56,43 @@ class Registry:
         self.providers_cfg = yaml.safe_load((self.root / "config/providers.yaml").read_text(encoding="utf-8"))
         self.dag = yaml.safe_load((self.root / "config/dag.yaml").read_text(encoding="utf-8"))
         self.gates = yaml.safe_load((self.root / "config/gates.yaml").read_text(encoding="utf-8"))
+        nv = self.root / "config/niveles.yaml"
+        self.niveles = yaml.safe_load(nv.read_text(encoding="utf-8")) if nv.exists() else {"activo": False}
+        if os.environ.get("NIVELES") in ("0", "1"):            # el job puede forzarlo (p. ej. benchmark o comparación v1/v2)
+            self.niveles["activo"] = os.environ["NIVELES"] == "1"
         self._adapters = {}
+
+    def modelos_hf(self) -> list[str]:
+        """v2: modelos de HF Inference Providers que puede usar el router (para registrar repo@sha en el job)."""
+        nv = self.niveles or {}
+        usados = set((nv.get("niveles") or {}).values()) | set((nv.get("asignacion") or {}).values()) if nv.get("activo") else set()
+        return sorted({self.providers_cfg["providers"][p]["model"] for p in usados
+                       if "router.huggingface.co" in str(self.providers_cfg["providers"].get(p, {}).get("url", ""))})
+
+    def ruta_nivel(self, agent_name: str, base: str) -> str | None:
+        """v2: proveedor que elige el router por nivel (None = sin router: misma ruta que la v1)."""
+        nv = self.niveles or {}
+        if not nv.get("activo") or base != nv.get("para_proveedor", "vllm_local"):
+            return None
+        ag = self.agents.get(agent_name)
+        tier = ag.spec.get("model_tier") if ag else None
+        dest = (nv.get("asignacion") or {}).get(agent_name) or (nv.get("niveles") or {}).get(tier)
+        return dest if dest and dest != base else None
 
     def provider_for(self, agent_name: str) -> tuple[str, dict]:
         ov = (self.providers_cfg.get("overrides") or {}).get(agent_name, {})
         name = ov.get("provider") or os.environ.get("PIPELINE_PROVIDER") or self.providers_cfg["default"]
+        ruta = self.ruta_nivel(agent_name, name)
+        if ruta:                                                # el router manda sobre los overrides de la v1
+            cfg = dict(self.providers_cfg["providers"][ruta])
+            ag = self.agents.get(agent_name)
+            esfuerzo = ag.spec.get("reasoning_effort") if ag else None
+            if esfuerzo and cfg.get("acepta_reasoning_effort"):
+                cfg["reasoning_effort"] = (self.niveles.get("esfuerzo") or {}).get(esfuerzo, esfuerzo)
+                if esfuerzo == "maximo" and cfg.get("max_new_tokens_maximo"):
+                    cfg["max_new_tokens"] = cfg["max_new_tokens_maximo"]
+                return f"{ruta}@{esfuerzo}", cfg
+            return ruta, cfg
         if ov.get("switch_to") and name == ov.get("for_provider"):   # D-F4-1 C: el agente pasa a otro servidor del mismo job
             return ov["switch_to"], dict(self.providers_cfg["providers"][ov["switch_to"]])
         cfg = dict(self.providers_cfg["providers"][name])
@@ -76,6 +108,9 @@ class Registry:
         """D-E1: proveedor que atiende la corrección tras una devolución humana (None = el mismo del agente)."""
         c = self.providers_cfg.get("correccion_humana") or {}
         base = os.environ.get("PIPELINE_PROVIDER") or self.providers_cfg["default"]
+        ruta = self.ruta_nivel(agent_name, base)
+        if ruta and ruta != c.get("for_provider"):     # v2: un agente con modelo de nivel corrige con su propio modelo
+            return None
         if c.get("switch_to") and base == c.get("for_provider"):
             return c["switch_to"], dict(self.providers_cfg["providers"][c["switch_to"]])
         return None

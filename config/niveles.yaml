@@ -1,0 +1,28 @@
+# Router por nivel de razonamiento (v2, Seleccion_Modelos_por_Nivel_Razonamiento v1.0; decisiones D-P5 y D-P6).
+#
+# Cada agente declara en su agent.yaml `model_tier` (N1/N2/N3) y `reasoning_effort` (bajo/medio/alto/maximo).
+# Con `activo: true`, el registro elige el proveedor de cada agente así:
+#   1) `asignacion.<agente>` si existe (la fija N4 con el benchmark y la escalera E0–E4);
+#   2) si no, `niveles.<nivel>`.
+# El router solo actúa cuando el proveedor base es `para_proveedor` (el modo real del job). En `prueba_offline` (CI)
+# no cambia nada. Los LoRA de F3 se siguen sirviendo desde vllm_local (overrides de config/providers.yaml).
+#
+# Mientras `activo: false`, el pipeline es idéntico a la v1 (piloto1 congelado como v1.0-piloto si N4 no cierra a tiempo).
+
+activo: false
+para_proveedor: vllm_local
+
+niveles:                       # E0 por nivel; N4 lo reemplaza agente por agente en `asignacion`
+  N1: vllm_local               # Qwen3-8B (+ LoRA donde existe)
+  N2: vllm_local
+  N3: vllm_teacher             # Qwen3-32B-AWQ hasta que N4 asigne Frontera A/B
+
+asignacion: {}                 # ejemplo tras N4: {solution-architect-agent: hf_glm53, code-review-agent: hf_dsv4pro}
+
+# Traducción de reasoning_effort al parámetro OpenAI-compatible `reasoning_effort` de los proveedores que lo aceptan.
+# Los proveedores sin `acepta_reasoning_effort: true` lo ignoran (p. ej. Qwen3 en vLLM, que corre sin modo de razonamiento).
+esfuerzo:
+  bajo: low
+  medio: medium
+  alto: high
+  maximo: high                 # la API OpenAI-compatible no tiene un nivel mayor; "máximo" se ejerce con más tokens de salida

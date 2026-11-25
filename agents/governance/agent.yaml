@@ -2,6 +2,7 @@ name: governance-agent
 domain: transversal
 phase: discovery   # se instancia por fase; en el vertical actual revisa artefactos de Discovery
 version: "1.1"
+model_tier: null          # sin LLM (governance determinista)
 implementation: deterministic   # F1.1: core/governance.py; sin modelo de lenguaje
 purpose: >
   Revisar cada artefacto producido frente a las políticas de la Empresa y a los criterios F5 del agente

@@ -2,6 +2,8 @@ name: test-case-generator-agent
 domain: calidad
 phase: calidad
 version: "1.0"
+model_tier: N1            # nivel de razonamiento a priori (C1–C4 = 6/12), Seleccion_Modelos_por_Nivel_Razonamiento v1.0
+reasoning_effort: bajo        # lo traduce el router al parámetro del proveedor (config/niveles.yaml)
 purpose: >
   Convertir los criterios Given/When/Then en casos de prueba unitarios, de integración y end-to-end
   ejecutables, con trazabilidad caso → criterio → historia.

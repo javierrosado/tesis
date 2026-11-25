@@ -59,6 +59,56 @@ providers:
     temperature: 0.2
     chat_template_kwargs: {enable_thinking: false}
 
+  # v2 · D-P5 (24/11/2026): modelos open-weight de frontera servidos por HF Inference Providers (router de Hugging Face,
+  # OpenAI-compatible, se paga con la cuenta HF; sin claves de terceros). Proveedor fijado con el sufijo ":<proveedor>";
+  # el job registra repo@sha y proveedor en entorno.json. Elección del proveedor: salida estructurada disponible, servidor
+  # fuera de China y precio publicado en router.huggingface.co/v1/models (consulta del 24/11/2026).
+  hf_glm53:                            # Frontera candidata: GLM-5.3 (Together: USD 1,40 / 4,40 por M tokens)
+    adapter: openai_compat
+    model: "zai-org/GLM-5.3:together"
+    url: https://router.huggingface.co/v1
+    api_key_env: HF_TOKEN
+    max_new_tokens: 16384
+    max_new_tokens_maximo: 32768
+    temperature: 0.2
+    acepta_reasoning_effort: true
+    context_tokens: 1000000
+    timeout_s: 1200
+
+  hf_dsv4pro:                          # Frontera candidata: DeepSeek V4-Pro (DeepInfra: USD 1,30 / 2,60 por M tokens)
+    adapter: openai_compat
+    model: "deepseek-ai/DeepSeek-V4-Pro:deepinfra"
+    url: https://router.huggingface.co/v1
+    api_key_env: HF_TOKEN
+    max_new_tokens: 16384
+    max_new_tokens_maximo: 32768
+    temperature: 0.2
+    acepta_reasoning_effort: true
+    context_tokens: 1000000
+    timeout_s: 1200
+
+  hf_dsv4flash:                        # alternativa de costo: DeepSeek V4-Flash (DeepInfra: USD 0,09 / 0,18 por M tokens)
+    adapter: openai_compat
+    model: "deepseek-ai/DeepSeek-V4-Flash:deepinfra"
+    url: https://router.huggingface.co/v1
+    api_key_env: HF_TOKEN
+    max_new_tokens: 16384
+    temperature: 0.2
+    acepta_reasoning_effort: true
+    context_tokens: 1000000
+    timeout_s: 1200
+
+  hf_qwen36:                           # N2 candidato: Qwen3.6-35B-A3B (único proveedor: Venice, sin salida estructurada)
+    adapter: openai_compat
+    model: "Qwen/Qwen3.6-35B-A3B:venice"
+    url: https://router.huggingface.co/v1
+    api_key_env: HF_TOKEN
+    max_new_tokens: 8192
+    temperature: 0.2
+    salida_estructurada: false         # el esquema va en el prompt y el puerto valida el contrato (reintentos con feedback)
+    context_tokens: 256000
+    timeout_s: 900
+
   hf_endpoint:                         # Inference Endpoint dedicado en Hugging Face (opcional)
     adapter: hf_endpoint
     model: Qwen/Qwen3-8B

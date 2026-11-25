@@ -2,6 +2,8 @@ name: code-review-agent
 domain: calidad
 phase: calidad
 version: "1.0"
+model_tier: N3            # nivel de razonamiento a priori (C1–C4 = 12/12), Seleccion_Modelos_por_Nivel_Razonamiento v1.0
+reasoning_effort: alto        # lo traduce el router al parámetro del proveedor (config/niveles.yaml) (por confirmar: el documento de selección no fija el esfuerzo de code-review)
 purpose: >
   Revisar el código generado combinando análisis estático real (ruff, bandit) y revisión del modelo,
   emitiendo hallazgos FIND-xxx localizados y un veredicto coherente con la severidad.

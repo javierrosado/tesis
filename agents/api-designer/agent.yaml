@@ -2,6 +2,8 @@ name: api-designer-agent
 domain: ingenieria
 phase: ingenieria
 version: "1.0"
+model_tier: N1            # nivel de razonamiento a priori (C1–C4 = 6/12), Seleccion_Modelos_por_Nivel_Razonamiento v1.0
+reasoning_effort: bajo        # lo traduce el router al parámetro del proveedor (config/niveles.yaml)
 purpose: >
   Transformar la arquitectura de solución en especificaciones OpenAPI 3.1 completas, con catálogo de
   errores RFC 7807, versionado, paginación y esquemas de seguridad.

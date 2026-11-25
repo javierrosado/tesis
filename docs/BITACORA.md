@@ -35,6 +35,7 @@ Registro cronológico de actividades, decisiones y dificultades de la implementa
 | 24/11/2026 | Ensayo | Rondas 15 y 16 del `ensayo1` | R001 llegó a la puerta de release con rollback ejecutable. La suite de R002 usaba `@pytest.mark.xfail` sin `import pytest` y fallaba al recolectarse (escaló). El backend de R003 devolvió JSON inválido 3 veces sin que quedara registro del texto | **D-E6:** el sistema agrega `import pytest` cuando la suite usa marcas de pytest; `contract_rejected` guarda el fragmento de salida alrededor del error JSON |
 | 24/11/2026 | Ensayo | Rondas 17 y 18; cierre del `ensayo1` | **R001 desplegado** en `tesis-sandbox` (resultado ok). R002 y R003 quedan en espera de gates. 20 jobs, ≈ USD 8,4 | Ensayo cerrado; informe en `docs/ENSAYO1.md`. Sus resultados no se reportan como resultados del piloto |
 | 24/11/2026 | Diseño | Consola del piloto y selección por niveles | Huecos G1–G4 en el pipeline (spec. de la consola) y falta de un generador de dictamen IA dentro del job | D-P1 a D-P7 (abajo); fase A: G1–G5 y R2 |
+| 24/11/2026 | v2 | N2: router por nivel | Los 13 agentes con LLM declaran `model_tier` y `reasoning_effort`; proveedores HF Inference Providers (GLM-5.3 en Together, DeepSeek V4-Pro/Flash en DeepInfra, Qwen3.6-35B-A3B en Venice, según el catálogo del router al 24/11) | Router inactivo hasta N4; esfuerzo de code-review por confirmar |
 | 30/11–11/12/2026 | F5 | Piloto en preproducción con los 30 requerimientos del squad (protocolo v2) | Pendiente | — |
 
 ## Decisiones metodológicas (resumen)

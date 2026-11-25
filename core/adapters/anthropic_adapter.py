@@ -4,6 +4,9 @@ code-review y security-compliance (declarado como desviación). Traduce el JSON 
 import os, time
 from .base import ModelResponse
 
+# USD por millón de tokens (entrada, salida), lista oficial de Anthropic al 25/11/2026; la API no devuelve el costo
+PRECIOS = {"claude-opus-5-5": (4.0, 20.0), "claude-sonnet-5-5": (2.0, 10.0), "claude-haiku-5-5": (0.10, 0.50)}
+
 
 class AnthropicAdapter:
     name = "anthropic"
@@ -37,9 +40,11 @@ class AnthropicAdapter:
         text = next((json.dumps(b.input, ensure_ascii=False) for b in r.content if b.type == "tool_use"), "")
         if not text:
             text = "".join(b.text for b in r.content if b.type == "text")
+        pin, pout = PRECIOS.get(self.model, (None, None))
+        costo = round((r.usage.input_tokens * pin + r.usage.output_tokens * pout) / 1e6, 6) if pin is not None else None
         return ModelResponse(text=text, model_id=r.model, provider=self.name,
                              tokens_in=r.usage.input_tokens, tokens_out=r.usage.output_tokens,
-                             latency_ms=int((time.time() - t0) * 1000))
+                             latency_ms=int((time.time() - t0) * 1000), meta={"costo_usd": costo})
 
 
 def _inline(schema: dict) -> dict:

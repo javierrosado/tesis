@@ -11,8 +11,8 @@ de los fallos).
 
 Variables: BRANCH, RUNS_REPO (tesis-runs, con runs/eval_n3/casos/), HF_TOKEN, ANTHROPIC_API_KEY (la mitad de Claude; sin ella esos casos
 quedan pendientes)."""
-import hashlib, io, json, os, sys, tarfile, textwrap, urllib.request
-from concurrent.futures import ThreadPoolExecutor
+import hashlib, io, json, os, sys, tarfile, textwrap, threading, urllib.request
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 BRANCH = os.environ.get("BRANCH", "main")
@@ -71,10 +71,12 @@ def generar(req: str) -> dict:
         cfg["reasoning_effort"] = "high"
     ad = build_adapter(name, cfg, ROOT)
     msgs = [{"role": "system", "content": SISTEMA}, {"role": "user", "content": "## Entrada\n```json\n" + json.dumps(entrada, ensure_ascii=False, indent=1) + "\n```"}]
-    ultimo = ""
+    ultimo = ""; gasto = {"costo_usd": 0.0, "tokens_in": 0, "tokens_out": 0, "llamadas": 0}
     for intento in range(6):
         try:
             r = ad.complete(msgs, SCHEMA)
+            gasto["llamadas"] += 1; gasto["tokens_in"] += r.tokens_in; gasto["tokens_out"] += r.tokens_out
+            gasto["costo_usd"] = round(gasto["costo_usd"] + float((r.meta or {}).get("costo_usd") or 0), 6)
             d = json.loads(r.text)
             back = {"req_id": req, "handlers": [{**h, "lineas": _cuerpo(h["lineas"])} for h in d["handlers"]], "semillas": d["semillas"]}
             qa = {"req_id": req, "suites": d["suites"]}
@@ -82,7 +84,7 @@ def generar(req: str) -> dict:
             rt = sandbox.run_tests(files, qa)
             if rt["collected"] >= 6 and rt["passed"] == rt["collected"]:
                 return {"req_id": req, "autor": autoria[req], "proveedor": prov, "modelo": cfg["model"], "estado": "ok", "intentos": intento + 1,
-                        "pruebas": rt["collected"], "servicio_limpio": back, "pruebas_aceptacion": qa}
+                        "pruebas": rt["collected"], **gasto, "servicio_limpio": back, "pruebas_aceptacion": qa}
             fallos = "\n".join(f"- {f['prueba']}: {f['detalle'][:300]}" for f in rt["fallos"][:8]) or f"recolectadas {rt['collected']} (mínimo 6)"
             ultimo = f"intento {intento + 1}: {rt['passed']}/{rt['collected']}\n{fallos}"
             msgs = msgs[:2] + [{"role": "assistant", "content": r.text[:20000]},
@@ -90,18 +92,31 @@ def generar(req: str) -> dict:
         except Exception as e:  # noqa: BLE001
             ultimo = f"intento {intento + 1}: {type(e).__name__}: {str(e)[:400]}"
             msgs = msgs[:2] + [{"role": "user", "content": f"Error: {str(e)[:400]}. Responde de nuevo el JSON completo."}]
-    return {"req_id": req, "autor": autoria[req], "proveedor": prov, "estado": "descartado", "ultimo_fallo": ultimo[:3000]}
+    return {"req_id": req, "autor": autoria[req], "proveedor": prov, "estado": "descartado", **gasto, "ultimo_fallo": ultimo[:3000]}
 
 
-with ThreadPoolExecutor(max_workers=int(os.environ.get("WORKERS", "3"))) as ex:   # 3 hilos: el router devolvía 429 con 6
-    res = list(ex.map(generar, [c for c in casos if not SOLO or c in SOLO]))
-out = Path("/tmp/ref"); out.mkdir()
-for x in res:
-    d = out / x["req_id"]; d.mkdir()
+_LOCK = threading.Lock()
+
+
+def publicar(x: dict) -> None:
+    """Sube cada caso en cuanto termina (antes solo al final: un timeout del job perdía todo)."""
+    d = Path("/tmp/ref") / x["req_id"]; d.mkdir(parents=True, exist_ok=True)
+    x = dict(x)
     for k in ("servicio_limpio", "pruebas_aceptacion"):
         if k in x:
             (d / f"{k}.json").write_text(json.dumps(x.pop(k), ensure_ascii=False, indent=1), encoding="utf-8")
     (d / "autoria.json").write_text(json.dumps(x, ensure_ascii=False, indent=1), encoding="utf-8")
-api.upload_folder(folder_path=str(out), path_in_repo="runs/eval_n3/casos", repo_id=RUNS, repo_type="dataset", commit_message="eval_n3: referencias de frontera")
+    with _LOCK:
+        api.upload_folder(folder_path=str(d), path_in_repo=f"runs/eval_n3/casos/{x['req_id']}", repo_id=RUNS, repo_type="dataset",
+                          commit_message=f"eval_n3: referencia {x['req_id']} ({x['estado']})")
+    print("CASO", json.dumps({k: x.get(k) for k in ("req_id", "autor", "estado", "intentos", "llamadas", "costo_usd")}), flush=True)
+
+
+res = []
+with ThreadPoolExecutor(max_workers=int(os.environ.get("WORKERS", "3"))) as ex:   # 3 hilos: el router devolvía 429 con 6
+    for f in as_completed([ex.submit(generar, c) for c in casos if not SOLO or c in SOLO]):
+        x = f.result(); res.append({k: v for k, v in x.items() if k not in ("servicio_limpio", "pruebas_aceptacion")}); publicar(x)
 print("RESUMEN", json.dumps({"casos": len(res), "por_autor": {a: sum(x["autor"] == a for x in res) for a in ("claude", "hf_glm53", "hf_dsv4pro")},
-                             "ok": sum(x["estado"] == "ok" for x in res), "descartados": [x["req_id"] for x in res if x["estado"] == "descartado"]}, ensure_ascii=False))
+                             "ok": sum(x["estado"] == "ok" for x in res),
+                             "costo_usd": {a: round(sum(x.get("costo_usd", 0) for x in res if x["autor"] == a), 4) for a in ("claude", "hf_glm53", "hf_dsv4pro")},
+                             "descartados": [x["req_id"] for x in res if x["estado"] == "descartado"]}, ensure_ascii=False))

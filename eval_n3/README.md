@@ -15,6 +15,19 @@ benchmark N3 (GLM-5.3 vs DeepSeek V4-Pro/Flash, con Claude como techo de referen
 
 Pares de modelos sobre los mismos casos → McNemar exacto (condición C3 de E4).
 
+**Ajuste tras los humos del 25/11/2026 (decisión de Javier, opción recomendada).** Con 2 casos, governance aprobó al 100 % a los
+4 modelos en SA, data-model y security (no discrimina), pass@1 del backend fue 0 % en todos (las pruebas de referencia fijan
+valores que la entrada no especifica, p. ej. `'ENVIADO'`) y code-review detectó el 100 % en todos (los mutantes de lógica
+aparecen en el reporte de pruebas y bandit señala los patrones de seguridad). Métricas principales desde entonces:
+
+| Agente | Principal | Secundarias |
+|---|---|---|
+| solution-architect, data-model, security | puntaje del juez 1–5 (Qwen3.6-35B-A3B, no candidato) · Wilcoxon pareado | aprobación en ronda 0 |
+| backend-developer | % de pruebas de aceptación que pasan por caso · Wilcoxon pareado | pass@1 |
+| code-review | falsos positivos sobre el servicio limpio y precisión de localización (hallazgos graves dentro del handler del defecto) | recall total y por tipo · McNemar |
+
+El juez no califica los artefactos de Claude (techo); su acuerdo con la revisión humana del 20 % se mide con kappa ponderado.
+
 ## 2. Estructura
 
 ```

@@ -18,8 +18,8 @@ MODELS = os.environ.get("MODELS", "Qwen/Qwen3-8B meta-llama/Llama-3.1-8B-Instruc
 AGENTS = os.environ.get("AGENTS", "product-analyst-agent solution-architect-agent api-designer-agent test-case-generator-agent cicd-pipeline-agent").split()
 url = f"https://github.com/javierrosado/tesis/archive/refs/heads/{BRANCH}.tar.gz"
 _auth = {"Authorization": "token " + os.environ["GITHUB_TOKEN"]} if os.environ.get("GITHUB_TOKEN") else {}  # repo privado desde el 23/11/2026
-tarfile.open(fileobj=io.BytesIO(urllib.request.urlopen(urllib.request.Request(url, headers=_auth)).read())).extractall("/tmp", filter="data")
-ROOT = Path(f"/tmp/tesis-{BRANCH.replace('/', '-')}"); os.chdir(ROOT); sys.path.insert(0, str(ROOT)); sys.path.insert(0, str(ROOT / "scripts"))
+_tar = tarfile.open(fileobj=io.BytesIO(urllib.request.urlopen(urllib.request.Request(url, headers=_auth)).read())); _tar.extractall("/tmp", filter="data")
+ROOT = Path("/tmp") / _tar.getnames()[0].split("/")[0]; os.chdir(ROOT); sys.path.insert(0, str(ROOT)); sys.path.insert(0, str(ROOT / "scripts"))  # nombre real de la carpeta (GitHub quita la 'v' inicial de ramas como v2-*)
 from core.envinfo import report as _entorno  # noqa: E402
 ENTORNO = _entorno({"job": os.environ.get("JOB_ID", "local"), "branch": BRANCH})
 from huggingface_hub import snapshot_download, HfApi   # noqa: E402

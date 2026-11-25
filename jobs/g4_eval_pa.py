@@ -21,8 +21,8 @@ TEACHER = os.environ.get("TEACHER", "Qwen/Qwen3-32B-AWQ")
 ADAPTER = os.environ.get("ADAPTER", "jrosado1974/qwen3-8b-product-analyst-lora"); AG = "product-analyst-agent"
 url = f"https://github.com/javierrosado/tesis/archive/refs/heads/{BRANCH}.tar.gz"
 _auth = {"Authorization": "token " + os.environ["GITHUB_TOKEN"]} if os.environ.get("GITHUB_TOKEN") else {}
-tarfile.open(fileobj=io.BytesIO(urllib.request.urlopen(urllib.request.Request(url, headers=_auth)).read())).extractall("/tmp", filter="data")
-ROOT = Path(f"/tmp/tesis-{BRANCH.replace('/', '-')}"); os.chdir(ROOT); sys.path.insert(0, str(ROOT)); sys.path.insert(0, str(ROOT / "scripts"))
+_tar = tarfile.open(fileobj=io.BytesIO(urllib.request.urlopen(urllib.request.Request(url, headers=_auth)).read())); _tar.extractall("/tmp", filter="data")
+ROOT = Path("/tmp") / _tar.getnames()[0].split("/")[0]; os.chdir(ROOT); sys.path.insert(0, str(ROOT)); sys.path.insert(0, str(ROOT / "scripts"))  # nombre real de la carpeta (GitHub quita la 'v' inicial de ramas como v2-*)
 from core.envinfo import report as _entorno  # noqa: E402
 ENTORNO = _entorno({"job": os.environ.get("JOB_ID", "local"), "branch": BRANCH})
 from huggingface_hub import snapshot_download, HfApi   # noqa: E402

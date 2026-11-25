@@ -29,6 +29,7 @@ RUNS = os.environ["RUNS_REPO"]; api = HfApi()
 src = Path(snapshot_download(RUNS, repo_type="dataset", allow_patterns=["runs/eval_n3/casos/**"])) / "runs/eval_n3/casos"
 reg = Registry(ROOT)
 casos = sorted(p.name for p in src.iterdir() if (p / "entradas" / "backend-developer-agent.json").exists())
+SOLO = [c for c in os.environ.get("CASOS", "").split(",") if c]           # rehacer solo estos (p. ej. los descartados)
 orden = sorted(casos, key=lambda r: hashlib.sha256(f"autoria:{r}".encode()).hexdigest())
 n = len(orden); n_claude = round(n / 2); n_glm = round((n - n_claude) * 8 / 15)
 autoria = {r: "claude" if i < n_claude else "hf_glm53" if i < n_claude + n_glm else "hf_dsv4pro" for i, r in enumerate(orden)}
@@ -45,7 +46,9 @@ SISTEMA = ("Eres un desarrollador senior. Escribes la implementación de referen
            "usan exactamente las tablas y columnas dadas; (3) cada prueba usa las fixtures `client` (TestClient) y `db`, llama "
            "a un endpoint con client y verifica status y cuerpo; las pruebas referencian datos de las semillas por su id "
            "(no por posición) y cubren los casos felices, los errores del catálogo y las reglas de negocio; (4) entre 6 y 12 "
-           "pruebas. Responde solo con el JSON.")
+           "pruebas. (5) Cada handler usa solo los parámetros de su firma en `firmas_handlers` (con esos nombres exactos; "
+           "`body` existe solo si la firma lo tiene). (6) Cada función de prueba declara `client` y `db` como parámetros "
+           "(def test_x(client, db):); no hay variables globales. Responde solo con el JSON.")
 
 
 def _cuerpo(lineas: list[str]) -> list[str]:
@@ -69,7 +72,7 @@ def generar(req: str) -> dict:
     ad = build_adapter(name, cfg, ROOT)
     msgs = [{"role": "system", "content": SISTEMA}, {"role": "user", "content": "## Entrada\n```json\n" + json.dumps(entrada, ensure_ascii=False, indent=1) + "\n```"}]
     ultimo = ""
-    for intento in range(4):
+    for intento in range(6):
         try:
             r = ad.complete(msgs, SCHEMA)
             d = json.loads(r.text)
@@ -90,8 +93,8 @@ def generar(req: str) -> dict:
     return {"req_id": req, "autor": autoria[req], "proveedor": prov, "estado": "descartado", "ultimo_fallo": ultimo[:3000]}
 
 
-with ThreadPoolExecutor(max_workers=6) as ex:
-    res = list(ex.map(generar, casos))
+with ThreadPoolExecutor(max_workers=int(os.environ.get("WORKERS", "3"))) as ex:   # 3 hilos: el router devolvía 429 con 6
+    res = list(ex.map(generar, [c for c in casos if not SOLO or c in SOLO]))
 out = Path("/tmp/ref"); out.mkdir()
 for x in res:
     d = out / x["req_id"]; d.mkdir()

@@ -17,7 +17,7 @@ class AnthropicAdapter:
         self.client = anthropic.Anthropic(api_key=key, default_headers={"anthropic-workspace-id": ws} if ws else None)
         self.model = cfg["model"]
         self.max_tokens = cfg.get("max_tokens", 4096)
-        self.temperature = cfg.get("temperature", 0.2)
+        self.temperature = cfg.get("temperature")      # None = no se envía (25/11: el SDK actual la rechaza con claude-opus-5-5)
 
     def capabilities(self) -> dict:
         return {"json_mode": True, "context_tokens": 200_000, "language": "es", "tools": ["rag.search"]}
@@ -25,7 +25,9 @@ class AnthropicAdapter:
     def complete(self, messages, schema=None, tools=None) -> ModelResponse:
         system = "\n\n".join(m["content"] for m in messages if m["role"] == "system" and not m.get("name"))
         convo = [{"role": m["role"], "content": m["content"]} for m in messages if m["role"] in ("user", "assistant")]
-        kwargs = dict(model=self.model, max_tokens=self.max_tokens, temperature=self.temperature, system=system, messages=convo)
+        kwargs = dict(model=self.model, max_tokens=self.max_tokens, system=system, messages=convo)
+        if self.temperature is not None:
+            kwargs["temperature"] = self.temperature
         if schema:
             kwargs["tools"] = [{"name": "emit", "description": "Devuelve el artefacto estructurado.", "input_schema": _inline(schema)}]
             kwargs["tool_choice"] = {"type": "tool", "name": "emit"}

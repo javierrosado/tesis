@@ -37,7 +37,7 @@ Registro cronológico de actividades, decisiones y dificultades de la implementa
 | 24/11/2026 | Diseño | Consola del piloto y selección por niveles | Huecos G1–G4 en el pipeline (spec. de la consola) y falta de un generador de dictamen IA dentro del job | D-P1 a D-P7 (abajo); fase A: G1–G5 y R2 |
 | 24/11/2026 | Fase A | G4: adaptador de product-analyst con BusinessRequest v1.1 | 24 casos de prueba con contexto v1.1 sintético (historia del maestro, criterios en 7/24, notas por plantilla): LoRA 95,8 % → 95,8 % de aprobación en la ronda 0; base 91,7 % → 95,8 %; McNemar p = 1,0 (job `6b065452…`) | El adaptador se mantiene; no se re-entrena |
 | 24/11/2026 | v2 | N2: router por nivel | Los 13 agentes con LLM declaran `model_tier` y `reasoning_effort`; proveedores HF Inference Providers (GLM-5.3 en Together, DeepSeek V4-Pro/Flash en DeepInfra, Qwen3.6-35B-A3B en Venice, según el catálogo del router al 24/11) | Router inactivo hasta N4; esfuerzo de code-review por confirmar |
-| 30/11–11/12/2026 | F5 | Piloto en preproducción con los 30 requerimientos del squad (protocolo v2) | Pendiente | — |
+| 14/12–23/12/2026 | F5 | Piloto en preproducción con los 30 requerimientos del squad (protocolo v2; arranque movido por D-P1) | Pendiente | — |
 
 ## Decisiones metodológicas (resumen)
 

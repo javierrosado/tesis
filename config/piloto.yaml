@@ -2,6 +2,22 @@
 # nombra un piloto de esta lista; si no, aplica la regla general de la política de release (martes o jueves).
 # Fijado antes del arranque: no se modifica durante el piloto (criterio C7 del protocolo).
 piloto1:
+  # D-P1 (24/11/2026): el arranque se movió del 30/11 al 14/12 para cerrar los huecos G1–G5, la selección por niveles y la
+  # consola antes del congelamiento (v1.0-piloto). El calendario original queda abajo como piloto1_plan_inicial.
+  zona_horaria: America/Lima
+  inicio: 2026-12-14
+  fin: 2026-12-23                      # cierre de la observación; los casos sin go_release quedan censurados en esta fecha
+  ventanas_aprobacion: ["09:00", "17:00"]
+  cierre_ventanas: ["10:00", "18:00"]  # P1 / D-P4: a esta hora dispara la reanudación automática (15:00 y 23:00 UTC)
+  dias_release: [2026-12-15, 2026-12-17, 2026-12-22, 2026-12-23]
+  feriados: []
+  despliegue: por_requerimiento        # un despliegue a staging por requerimiento (pueden coincidir el mismo día)
+  observacion:
+    fallo_despliegue_dias_habiles: 3   # H2: rollback o corrección dentro de este plazo cuenta como despliegue fallido
+    defecto_escapado_dias_habiles: 5   # H3: o hasta la fecha de fin, lo que ocurra primero
+
+# Calendario original (20/11/2026), reemplazado por D-P1. Se conserva para trazabilidad y para las pruebas del protocolo.
+piloto1_plan_inicial:
   zona_horaria: America/Lima
   inicio: 2026-11-30
   fin: 2026-12-11                      # cierre de la observación; los casos sin go_release quedan censurados en esta fecha

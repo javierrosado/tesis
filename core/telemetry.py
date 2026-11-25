@@ -1,14 +1,15 @@
 """Telemetría JSONL. Mismo esquema de eventos que el piloto simulado (eventos_G2.jsonl) para que el
 análisis estadístico (H1–H6) se ejecute sin cambios sobre corridas reales. Cada evento lleva provider y
 model_id: así se filtra y demuestra qué proveedor produjo cada dato."""
-import json, time, uuid
+import json, os, time, uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
 
 class Telemetry:
-    def __init__(self, path: Path, run_id: str | None = None):
+    def __init__(self, path: Path, run_id: str | None = None, echo: bool | None = None):
         self.path = Path(path); self.path.parent.mkdir(parents=True, exist_ok=True)
+        self.echo = os.environ.get("TELEMETRY_ECHO", "1") == "1" if echo is None else echo
         self.run_id = run_id or uuid.uuid4().hex[:12]
         self._t0 = time.time()
 
@@ -16,8 +17,11 @@ class Telemetry:
         ev.setdefault("ts", datetime.now(timezone.utc).isoformat(timespec="milliseconds"))
         ev.setdefault("run_id", self.run_id)
         ev.setdefault("elapsed_s", round(time.time() - self._t0, 3))
+        linea = json.dumps(ev, ensure_ascii=False)
         with self.path.open("a", encoding="utf-8") as f:
-            f.write(json.dumps(ev, ensure_ascii=False) + "\n")
+            f.write(linea + "\n")
+        if self.echo:       # G3 (consola §5): estado en vivo; la consola lee las líneas EVENT de fetch_job_logs
+            print("EVENT " + linea, flush=True)
         return ev
 
     def read(self):

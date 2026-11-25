@@ -6,7 +6,7 @@ Un requerimiento de negocio entra al pipeline y **16 agentes** lo transforman, d
 
 Todo funciona con **modelos de lenguaje de pesos abiertos** (sin APIs comerciales). Cinco agentes tienen un **adaptador QLoRA propio**, entrenado para esta tesis.
 
-> **Estado al 20/11/2026:** pipeline de 16 agentes implementado y probado de punta a punta; 5 adaptadores entrenados y evaluados; comparación de modelos base ejecutada; despliegue real validado. **Piloto real con 30 requerimientos: del 30/11 al 11/12/2026** (protocolo v2).
+> **Estado al 20/11/2026:** pipeline de 16 agentes implementado y probado de punta a punta; 5 adaptadores entrenados y evaluados; comparación de modelos base ejecutada; despliegue real validado. **Piloto real con 30 requerimientos: del 14/12 al 23/12/2026** (protocolo v2; arranque movido por D-P1).
 
 ---
 
@@ -110,13 +110,13 @@ Cada fase entrega algo que usa la siguiente. Las fechas, decisiones y dificultad
 | **Procesamiento** | Pruebas de humo en A100 (`jobs/run_pipeline_job.py`); corrección de 13 fallas; decisión **D-F4-1** (el maestro atiende a backend, QA y code-review); prueba del flujo de gates manuales; despliegue a `tesis-sandbox` |
 | **Salida** | Dos requerimientos recorrieron los 16 agentes hasta un release *no-go* justificado (sección 2.6). Despliegue real validado (run 44764311596: test ✔ y deploy ✔). Flujo de aprobación humana probado (opción A). Costo ≈ USD 3,84 |
 
-#### F5 · Piloto (30/11 – 11/12/2026, protocolo v2) ⏳ programado
+#### F5 · Piloto (14/12 – 23/12/2026, protocolo v2) ⏳ programado
 
 | | |
 |---|---|
 | **Objetivo** | Evaluar el pipeline en preproducción, con despliegues reales a *staging*, y contrastar sus indicadores con la línea base (OE4) |
 | **Entrada** | Los 30 requerimientos del Squad Fuerza de Ventas ([`data/requerimientos/`](data/requerimientos/)): 27 históricos, emparejados con su registro en la línea base, y 3 nuevos. Los modelos de F3 y F4, el calendario del piloto ([`config/piloto.yaml`](config/piloto.yaml)), el checklist de gates fijado antes del arranque ([`docs/checklists_gates.md`](docs/checklists_gates.md)) y las decisiones humanas del autor |
-| **Procesamiento** | `jobs/run_pipeline_job.py` con `PILOT=piloto1` y `GATES_MODE=manual`. El pipeline se detiene en cada gate de riesgo alto; el autor decide en ventanas de 09:00 y 17:00 aplicando el checklist, con un dictamen de IA registrado aparte (`scripts/pilot_control.py lote`). Los releases *go* se despliegan en staging los días de release (01/12, 03/12, 09/12 y 10/12; el feriado del 08/12 pasa al 09/12), un despliegue por requerimiento. Los defectos escapados y los rollback o correcciones se registran con `pilot_control.py defecto` y `despliegue`. Las salidas van a un dataset privado. Tope de gasto: USD 10 |
+| **Procesamiento** | `jobs/run_pipeline_job.py` con `PILOT=piloto1` y `GATES_MODE=manual`. El pipeline se detiene en cada gate de riesgo alto; el autor decide en ventanas de 09:00 y 17:00 (cierre 10:00 y 18:00) aplicando el checklist, con un dictamen de IA que genera el propio job (governance + Qwen3-32B-AWQ, G5) registrado aparte (`scripts/pilot_control.py lote`). Los releases *go* se despliegan en staging los días de release (15/12, 17/12, 22/12 y 23/12), un despliegue por requerimiento. Los defectos escapados y los rollback o correcciones se registran con `pilot_control.py defecto` y `despliegue`. Las salidas van a un dataset privado. Tope de gasto: USD 10 |
 | **Salida esperada** | Marcas de tiempo `entrada_pipeline`, `go_release` y `deploy_ok_staging` por requerimiento; H1a, H1b, H2, H3, H3′, H4–H6 con `scripts/indicadores.py`; contraste estadístico con la línea base con `scripts/contraste.py` (Wilcoxon, Mann-Whitney, Fisher, McNemar, Holm, IC de Newcombe y Clopper-Pearson) |
 
 **Transversal · Reproducibilidad (20/11/2026) ✅.** Versiones fijadas en cada job, registro de hardware y versiones (`core/envinfo.py`), notebooks de EDA ejecutados, verificación de fuga (`scripts/verificar_fuga.py`) y repetición de la evaluación de DevOps con resultado idéntico (9/9). Detalle en la sección 7.
@@ -248,6 +248,12 @@ flowchart LR
 **D-E5 (24/11/2026):** el maestro (`vllm_teacher`) genera hasta 10 240 tokens de salida (antes 6144). Si la entrada más la salida superan el contexto de 28 000 tokens del vLLM, el adaptador reintenta con 4096 y lo deja en el log. El backend genera filas de ejemplo solo para las tablas que leen los endpoints.
 
 **D-E6 (24/11/2026):** al montar las pruebas, el sistema antepone `import pytest` si una suite usa `pytest.` sin importarlo (no cambia ninguna prueba). Cuando una salida del modelo no es JSON válido, el evento `contract_rejected` registra `contexto` (los 400 caracteres alrededor del error) y `largo_salida`.
+
+**Huecos cerrados antes del congelamiento (fase A de la consola, 24/11/2026):**
+- **G1 · BusinessRequest v1.1:** `core/intake.py` incorpora `historia_original`, `criterios_aceptacion` y `notas_refinamiento` (obligatorios). La v1.0 se conserva (`version="1.0"`) para reconstruir los datasets de F2/F3 y comparar el adaptador de product-analyst (G4).
+- **G2 · Entradas auditables:** cada llamada a un agente deja `output/<artefacto>.input.r<n>.json` con el hash de cada entrada, los ids y el hash del conocimiento recuperado, el modelo, el adaptador con su revisión (`repo@sha`), el proveedor, el hash del prompt completo, las devoluciones aplicadas y la hora de Lima. El job fija las revisiones en `MODEL_REVS` y sube `piloto/<p>/entornos/<job>.json`.
+- **G3 · Estado en vivo:** cada evento de telemetría sale también por stdout como `EVENT {json}` (lo lee la consola con `fetch_job_logs`), y el estado de cada requerimiento se publica en el dataset apenas se detiene.
+- **G5 · Dictamen IA:** al quedar pendiente una puerta, `core/dictamen.py` agrega al pendiente el dictamen de governance + Qwen3-32B-AWQ con el checklist del rol (`items`, `recomendacion`, `motivo_sugerido`, `discrepancia_governance`, `autoevaluacion`). Con puertas manuales el maestro siempre se carga. `pilot_control.py lote` toma ese dictamen para la concordancia humano–IA.
 
 Los modelos se sirven con **vLLM** (multi-LoRA y salida restringida por JSON Schema). El modelo es un recurso inyectado por configuración: cambiar de proveedor es editar `config/providers.yaml`.
 

@@ -228,7 +228,7 @@ if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--piloto", required=True, help="CSV por requerimiento de scripts/indicadores.py --csv-req")
     ap.add_argument("--linea-base", default=str(ROOT / "data/linea_base/Linea_BaseV2.xlsx"))
-    ap.add_argument("--dias-exposicion", type=float, default=12.0, help="días del piloto (30/11–11/12 = 12)")
+    ap.add_argument("--dias-exposicion", type=float, default=10.0, help="días del piloto (14/12–23/12 = 10)")
     ap.add_argument("--md"); ap.add_argument("--json")
     a = ap.parse_args()
     pil = pd.read_csv(a.piloto); pil.attrs["dias_exposicion"] = a.dias_exposicion

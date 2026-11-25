@@ -80,6 +80,14 @@ class Registry:
             return c["switch_to"], dict(self.providers_cfg["providers"][c["switch_to"]])
         return None
 
+    def dictamen_provider(self) -> tuple[str, dict] | None:
+        """G5: proveedor del dictamen IA de las puertas (None = solo governance determinista)."""
+        c = self.providers_cfg.get("dictamen") or {}
+        base = os.environ.get("PIPELINE_PROVIDER") or self.providers_cfg["default"]
+        if c.get("switch_to") and base == c.get("for_provider"):
+            return c["switch_to"], dict(self.providers_cfg["providers"][c["switch_to"]])
+        return None
+
     def adapter_by_name(self, name: str, cfg: dict):
         from core.adapters import build_adapter
         if name not in self._adapters:

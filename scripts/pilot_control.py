@@ -70,10 +70,12 @@ def lote(a):
     base = _state(a.pilot); ts = datetime.now(timezone.utc).isoformat(timespec="seconds"); ops, regs = [], []
     for d in spec["decisiones"]:
         pend = json.loads((base / d["req"] / "output" / "pendientes" / f"{d['artefacto']}.json").read_text(encoding="utf-8"))
-        dic = d.get("dictamen_ia") or {}
+        # G5: el dictamen lo genera el job (governance + maestro) y viene en el pendiente; uno externo solo se acepta si
+        # no lo hay (ensayo1) y se marca con su origen
+        dic = pend.get("dictamen_ia") or ({**d["dictamen_ia"], "por": d["dictamen_ia"].get("por", "externo")} if d.get("dictamen_ia") else {})
         rec = {"decision": d["decision"], "motivo": d.get("motivo", ""), "por": spec.get("por", "Javier Rosado"), "rol": pend["rol"],
                "hash": pend["hash"], "ts": ts, "ventana": spec.get("ventana"),
-               "dictamen_ia": {**dic, "por": "asistente IA (Claude)"} if dic else None,
+               "dictamen_ia": dic or None,
                "coincide_con_ia": (dic.get("recomendacion") == d["decision"]) if dic else None}
         ops.append(CommitOperationAdd(f"piloto/{a.pilot}/estado/{d['req']}/output/aprobaciones/{d['artefacto']}.json",
                                       json.dumps(rec, ensure_ascii=False, indent=1).encode()))

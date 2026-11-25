@@ -172,7 +172,7 @@ def main():
     files = {s: (out / f"{s}.jsonl").open("w", encoding="utf-8") for s in ("train", "val", "test")}
     stats = {"train": 0, "val": 0, "test": 0, "f5_ok": 0, "total": 0}
     for r in sorted(reqs):
-        br0 = load_business_request(ROOT / "data/requerimientos" / r)
+        br0 = load_business_request(ROOT / "data/requerimientos" / r, version="1.0")  # F2/F3 se construyeron con v1.0
         n = a.variants if split[r] == "train" else max(3, a.variants // 3)
         for v in variants(br0, cat, n, rng):
             jsonschema.validate(v, agent.input_schema)

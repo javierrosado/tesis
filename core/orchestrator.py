@@ -147,6 +147,8 @@ class Orchestrator:
                 req = {"artefacto": art, "rol": g["role"], "hash": _hash(out), "solicitado": _now(), "agente": producer.name,
                        "hallazgos_governance": verdict["hallazgos"] + ([{"severidad": "mayor", "regla": "calidad_pruebas", "detalle": forzar_humano,
                                                                           "ubicacion": "suites"}] if forzar_humano else [])}
+                req["dictamen_ia"] = self._dictamen(producer, art, out, {**verdict, "hallazgos": req["hallazgos_governance"]}, ctx,
+                                                    escalado=bool(forzar_humano))
                 pend = self._out_dir(ctx["req_id"]) / "pendientes"; pend.mkdir(exist_ok=True)
                 (pend / f"{art}.json").write_text(json.dumps(req, ensure_ascii=False, indent=1), encoding="utf-8")
                 decision = {"decision": "pending", "role": g["role"], "by": "human", "riesgo": "alto", "hash": req["hash"], "solicitado": req["solicitado"]}
@@ -160,6 +162,31 @@ class Orchestrator:
                         "delegated": bool(delegated), "delay_h": delay}
         self.tel.emit(event="human_gate", req_id=ctx["req_id"], agent=producer.name, artefact=art, **{k: v for k, v in decision.items() if k != "hash"})
         return decision
+
+    def _dictamen(self, producer, art: str, out: dict, verdict: dict, ctx: dict, escalado: bool = False, f5: dict | None = None) -> dict:
+        """G5: dictamen IA de la puerta (governance + maestro del pipeline), guardado aparte de la decisión humana."""
+        from . import dictamen, calendario
+        alt = self.reg.dictamen_provider()
+        down = [x for x in os.environ.get("PROVIDERS_DOWN", "").split(",") if x]
+        adapter = self.reg.adapter_by_name(*alt) if alt and alt[0] not in down else None
+        prod_name, _ = self.reg.provider_for(producer.name)
+        br = ctx.get("business_request", {})
+        contexto = {"business_request": {k: br[k] for k in ("titulo", "necesidad", "resultado_esperado", "reglas_negocio",
+                                                              "criterios_aceptacion", "notas_refinamiento") if k in br}}
+        if art in ("code_review", "qa_suite"):
+            try:
+                contexto["pruebas"] = verify.quality_facts(ctx)
+            except Exception:  # noqa: BLE001
+                pass
+        if art == "release_plan":
+            contexto["dias_release_permitidos"] = (ctx.get("calendario") or {}).get("dias_release", [])
+            contexto["hallazgos_seguridad"] = [{k: h.get(k) for k in ("id", "severidad", "descripcion")}
+                                               for h in (ctx.get("security_compliance") or {}).get("hallazgos", [])]
+        try:
+            return dictamen.dictaminar(self.root, adapter, art, producer.gate["role"], out, verdict, f5, contexto, escalado=escalado,
+                                       autoevaluacion=bool(alt) and prod_name.split(":")[0] == alt[0], ts=calendario.ahora_lima())
+        except Exception as e:  # noqa: BLE001
+            return {"estado": "error", "error": str(e)[:300], "recomendacion": None}
 
     def _human_decision(self, req_id: str, art: str, meta_gate: dict) -> dict | None:
         p = self._out_dir(req_id) / "aprobaciones" / f"{art}.json"
@@ -217,14 +244,17 @@ class Orchestrator:
                               "ubicacion": "<raíz>"} for p in previos]
                 anterior = out
         max_rounds = agent.spec.get("max_governance_rounds", self.reg.dag.get("retry", {}).get("max_governance_rounds", 2))
-        knowledge, _ = self.rag.context_block(self._queries_for(agent, ctx))
+        knowledge, knowledge_refs = self.rag.context_block(self._queries_for(agent, ctx))
         self.tel.emit(event="handoff", req_id=req_id, to=agent_name, frm=agent.spec.get("consumes_from"), mode="auto")
         feedback = feedback0
         correccion = anterior is not None
         if correccion:
             self.tel.emit(event="correccion_humana", req_id=req_id, agent=agent_name, artefact=name, devoluciones=len(feedback0 or []))
         for round_ in range(max_rounds + 1):
-            out, stats = self._port(agent, correccion).run(agent, req_id, self._messages(agent, payload, knowledge, feedback, anterior), variant=f"r{round_}")
+            port = self._port(agent, correccion)
+            msgs = self._messages(agent, payload, knowledge, feedback, anterior)
+            self._registrar_input(agent, req_id, name, round_, payload, knowledge, knowledge_refs, msgs, feedback, port, correccion)
+            out, stats = port.run(agent, req_id, msgs, variant=f"r{round_}")
             self._stamp_provenance(agent, out, req_id)
             verdict, ok_f5, f5 = self._review(agent, out, ctx, round_)
             if verdict["veredicto"] == "rechazado":
@@ -254,12 +284,39 @@ class Orchestrator:
             # Escalamiento (F3 de cada ficha): el humano decide sobre la última versión con los hallazgos a la vista
             req = {"artefacto": name, "rol": agent.gate["role"], "hash": _hash(out), "solicitado": _now(), "agente": agent_name,
                    "escalado": True, "hallazgos_governance": verdict["hallazgos"]}
+            req["dictamen_ia"] = self._dictamen(agent, name, out, verdict, ctx, escalado=True, f5=f5)
             pend = self._out_dir(req_id) / "pendientes"; pend.mkdir(exist_ok=True)
             (pend / f"{name}.json").write_text(json.dumps(req, ensure_ascii=False, indent=1), encoding="utf-8")
             gate = {"decision": "pending", "role": agent.gate["role"], "by": "human", "riesgo": "escalado", "hash": req["hash"], "solicitado": req["solicitado"]}
             self._save(ctx, name, out, {"verdict": verdict, "f5": f5, "gate": gate, "model": stats, "rounds": max_rounds, "escalado": True})
             raise PendingApproval(f"{req_id}/{name} (escalado)")
         raise ContractError(f"{agent_name}/{req_id}: rechazado por gobernanza {max_rounds + 1} veces")
+
+    def _registrar_input(self, agent, req_id: str, name: str, round_: int, payload, knowledge: str, knowledge_refs: list,
+                         msgs: list, feedback, port, correccion: bool) -> Path:
+        """G2 (consola §6): deja auditable qué recibió el agente en cada llamada: hashes de cada entrada, conocimiento
+        recuperado, modelo/adaptador/proveedor, hash del prompt completo y devoluciones aplicadas. Un archivo por llamada
+        (<artefacto>.input.r<n>.json, n correlativo por artefacto); 'ronda' es la ronda de governance de esa llamada."""
+        from . import calendario
+        sha = lambda o: "sha256:" + hashlib.sha256((o if isinstance(o, str) else json.dumps(o, sort_keys=True, ensure_ascii=False)).encode()).hexdigest()
+        ad = port.adapter
+        modelo = ad.model if isinstance(getattr(ad, "model", None), str) else getattr(ad, "model_id", None) or getattr(ad, "name", "?")
+        revs = json.loads(os.environ.get("MODEL_REVS", "{}") or "{}")   # {"base": "repo@sha", "modelos": {...}, "loras": {módulo: "repo@sha"}}; lo fija el job
+        loras = revs.get("loras", {})
+        adaptador = loras.get(modelo)
+        rec = {"req_id": req_id, "agente": agent.name, "artefacto": name, "ronda": round_,
+               "inputs": ({"business_request": sha(payload)} if isinstance(payload, dict) and "contract_version" in payload
+                          else {k: sha(v) for k, v in payload.items()} if isinstance(payload, dict) else {"payload": sha(payload)}),
+               "knowledge_refs": knowledge_refs, "knowledge_sha256": sha(knowledge or ""),
+               "modelo": revs.get("base", modelo) if adaptador else revs.get("modelos", {}).get(modelo, modelo),
+               "adaptador": adaptador, "proveedor": getattr(ad, "name", None),
+               "prompt_sha256": sha(msgs), "feedback_aplicado": feedback or [], "correccion_humana": correccion,
+               "ts": calendario.ahora_lima()}
+        out = self._out_dir(req_id)
+        n = len(list(out.glob(f"{name}.input.r*.json")))
+        p = out / f"{name}.input.r{n}.json"
+        p.write_text(json.dumps(rec, ensure_ascii=False, indent=1), encoding="utf-8")
+        return p
 
     @staticmethod
     def _stamp_provenance(agent, out: dict, req_id: str) -> None:

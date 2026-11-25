@@ -124,7 +124,7 @@ def a_markdown(res: dict) -> str:
 
 def _trazable(out: Path, req: str) -> bool:
     """H5: cada artefacto del requerimiento tiene procedencia (req_id y fase) y su decisión de governance registrada."""
-    arts = [p for p in out.glob("*.json") if not p.name.endswith(".decision.json") and p.stem not in NO_ARTEFACTOS]
+    arts = [p for p in out.glob("*.json") if not p.name.endswith(".decision.json") and ".input.r" not in p.name and p.stem not in NO_ARTEFACTOS]
     if not arts:
         return False
     for a in arts:

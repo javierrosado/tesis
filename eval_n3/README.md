@@ -9,9 +9,9 @@ benchmark N3 (GLM-5.3 vs DeepSeek V4-Pro/Flash, con Claude como techo de referen
 |---|---|---|
 | solution-architect | historias + dominio + UX aprobados | aprobación de governance en la ronda 0 (≥ 80 %) y rúbrica del juez (1–5) |
 | data-model | arquitectura + dominio aprobados | aprobación en la ronda 0 (≥ 80 %) y rúbrica |
-| security-compliance | arquitectura + historias | aprobación en la ronda 0 (≥ 80 %) y **recall de defectos de seguridad sembrados** (≥ 70 %) |
+| security-compliance | arquitectura + historias | aprobación en la ronda 0 (≥ 80 %) y rúbrica del juez (trabaja sobre la arquitectura, no sobre el código) |
 | backend-developer | diseño de API + modelo de datos aprobados | **pass@1** de las pruebas de aceptación del caso (≥ 70 %) |
-| code-review | servicio con defectos sembrados | **recall de defectos sembrados** (≥ 70 %), con precisión reportada |
+| code-review | servicio con un defecto sembrado (lógica o seguridad), con el análisis estático y el reporte de las pruebas del pipeline v1, igual que en el pipeline | **recall de defectos sembrados** (≥ 70 %), con falsos positivos sobre el servicio limpio |
 
 Pares de modelos sobre los mismos casos → McNemar exacto (condición C3 de E4).
 

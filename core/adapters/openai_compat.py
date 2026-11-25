@@ -78,7 +78,7 @@ class OpenAICompatAdapter:
                 u = r.get("usage", {})
                 return ModelResponse(text=r["choices"][0]["message"]["content"], model_id=self.model, provider=self.name,
                                      tokens_in=u.get("prompt_tokens", 0), tokens_out=u.get("completion_tokens", 0),
-                                     latency_ms=int((time.time() - t0) * 1000))
+                                     latency_ms=int((time.time() - t0) * 1000), meta={"costo_usd": u.get("cost")})
             if e.code != 400 or not schema:
                 raise
             body["response_format"]["json_schema"]["schema"] = _grammar_safe(schema, drop_patterns=True)   # reintento sin regex
@@ -86,4 +86,4 @@ class OpenAICompatAdapter:
         u = r.get("usage", {})
         return ModelResponse(text=r["choices"][0]["message"]["content"], model_id=self.model, provider=self.name,
                              tokens_in=u.get("prompt_tokens", 0), tokens_out=u.get("completion_tokens", 0),
-                             latency_ms=int((time.time() - t0) * 1000))
+                             latency_ms=int((time.time() - t0) * 1000), meta={"costo_usd": u.get("cost")})   # HF router informa el costo

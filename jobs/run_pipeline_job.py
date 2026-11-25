@@ -119,6 +119,10 @@ _LOCK = threading.Lock()                      # commits al dataset en serie (los
 
 def _publicar(r: str) -> None:
     out = ROOT / "data/requerimientos" / r / "output"
+    if PREP and (out.parent / "input").exists():   # eval_n3: los requerimientos se generan en el job; se guarda su entrada
+        with _LOCK:
+            api.upload_folder(folder_path=str(out.parent / "input"), path_in_repo=f"piloto/{PILOT}/estado/{r}/input", repo_id=RUNS,
+                              repo_type="dataset", commit_message=f"{PILOT} {r} input")
     if out.exists():
         with _LOCK:
             api.upload_folder(folder_path=str(out), path_in_repo=f"piloto/{PILOT}/estado/{r}/output", repo_id=RUNS, repo_type="dataset",

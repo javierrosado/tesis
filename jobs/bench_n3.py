@@ -72,7 +72,7 @@ def llamar(m, agente, caso, payload, br, variante=""):
     ag = reg.agents[agente]
     knowledge, _ = orch.rag.context_block(orch._queries_for(ag, {"business_request": br}))
     msgs = orch._messages(ag, payload, knowledge)
-    out, st = ModelPort(adaptador(m, agente), tel).run(ag, caso, msgs, variant=variant)
+    out, st = ModelPort(adaptador(m, agente), tel).run(ag, caso, msgs, variant=variante)
     return out, st
 
 
@@ -80,7 +80,7 @@ def evaluar(job):
     m, agente, caso = job
     d = src / caso
     br = J(d / "business_request.json") or {}
-    r = {"modelo": m, "agente": agente, "caso": caso}
+    r = {"modelo": m, "agente": agente, "caso": caso, "autor_ref": (J(d / "autoria.json") or {}).get("autor")}
     try:
         if agente == "code-review-agent":
             return evaluar_revision(m, caso, d, br, r)
@@ -166,6 +166,16 @@ for a in AGENTES:
         else:
             k = METRICA.get(a) or "aprobado_r0"
             t[f"{k}_%"] = round(100 * sum(bool(f.get(k)) for f in fs) / len(fs), 1)
+        if a in ("backend-developer-agent", "code-review-agent"):    # eval_n3/README §3.1: sesgo de autoría (19 Claude / 9 frontera)
+            est = {}
+            for au in sorted({f.get("autor_ref") or "?" for f in fs}):
+                g = [f for f in fs if (f.get("autor_ref") or "?") == au]
+                if a == "code-review-agent":
+                    dd = sum(f.get("defectos", 0) for f in g)
+                    est[au] = {"n": len(g), "recall_pct": round(100 * sum(f.get("detectados", 0) for f in g) / dd, 1) if dd else None}
+                else:
+                    est[au] = {"n": len(g), "pass_at_1_%": round(100 * sum(bool(f.get("pass_at_1")) for f in g) / len(g), 1)}
+            t["por_autor_ref"] = est
         lat = [f["latencia_ms"] for f in fs if f.get("latencia_ms")]
         t["latencia_mediana_s"] = round(statistics.median(lat) / 1000, 1) if lat else None
         tabla[a][m] = t

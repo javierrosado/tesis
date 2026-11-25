@@ -51,8 +51,32 @@ class OpenAICompatAdapter:
         headers = {"Content-Type": "application/json"}
         if self.api_key:
             headers["Authorization"] = f"Bearer {self.api_key}"
-        req = urllib.request.Request(self.url, data=json.dumps(body).encode(), headers=headers)
-        return json.load(urllib.request.urlopen(req, timeout=self.timeout))
+        for intento in range(5):        # HF Inference Providers devuelve 429/5xx bajo carga (eval_n3, 25/11): espera y reintenta
+            req = urllib.request.Request(self.url, data=json.dumps(body).encode(), headers=headers)
+            try:
+                return json.load(urllib.request.urlopen(req, timeout=self.timeout))
+            except urllib.error.HTTPError as e:
+                if e.code not in (429, 500, 502, 503, 504) or intento == 4:
+                    raise
+                espera = float(e.headers.get("Retry-After") or 0) or 5 * 2 ** intento
+                print(f"[openai_compat] HTTP {e.code}; reintento en {espera:.0f} s", file=sys.stderr, flush=True)
+                time.sleep(min(espera, 120))
+        raise RuntimeError("inalcanzable")
+
+    def _texto(self, r: dict, body: dict) -> tuple[str, dict]:
+        """Contenido de la respuesta. Un modelo de razonamiento puede agotar max_tokens pensando y devolver content=None
+        (DeepSeek V4-Pro en eval_n3, 25/11): se reintenta una vez con el doble de tokens y, si sigue vacío, se informa."""
+        ch = r["choices"][0]
+        txt = (ch.get("message") or {}).get("content")
+        if txt:
+            return txt, r
+        if body.get("max_tokens", 0) < 65536 and not body.get("_reintento_vacio"):
+            body2 = {**body, "max_tokens": body["max_tokens"] * 2}
+            r2 = self._post(body2)
+            if (r2["choices"][0].get("message") or {}).get("content"):
+                return r2["choices"][0]["message"]["content"], r2
+            ch = r2["choices"][0]
+        raise RuntimeError(f"respuesta sin contenido (finish_reason={ch.get('finish_reason')}, uso={r.get('usage')})")
 
     def complete(self, messages, schema=None, tools=None) -> ModelResponse:
         chat = [{"role": m["role"], "content": m["content"]} for m in messages if not m.get("name")]
@@ -75,15 +99,17 @@ class OpenAICompatAdapter:
             if e.code == 400 and "context length" in detail.lower() and self.max_tokens > 4096:
                 body["max_tokens"] = 4096       # D-E5: entrada larga; se cede salida antes que fallar (queda en el log)
                 r = self._post(body)
+                txt, r = self._texto(r, body)
                 u = r.get("usage", {})
-                return ModelResponse(text=r["choices"][0]["message"]["content"], model_id=self.model, provider=self.name,
+                return ModelResponse(text=txt, model_id=self.model, provider=self.name,
                                      tokens_in=u.get("prompt_tokens", 0), tokens_out=u.get("completion_tokens", 0),
                                      latency_ms=int((time.time() - t0) * 1000), meta={"costo_usd": u.get("cost")})
             if e.code != 400 or not schema:
                 raise
             body["response_format"]["json_schema"]["schema"] = _grammar_safe(schema, drop_patterns=True)   # reintento sin regex
             r = self._post(body)
+        txt, r = self._texto(r, body)
         u = r.get("usage", {})
-        return ModelResponse(text=r["choices"][0]["message"]["content"], model_id=self.model, provider=self.name,
+        return ModelResponse(text=txt, model_id=self.model, provider=self.name,
                              tokens_in=u.get("prompt_tokens", 0), tokens_out=u.get("completion_tokens", 0),
                              latency_ms=int((time.time() - t0) * 1000), meta={"costo_usd": u.get("cost")})   # HF router informa el costo

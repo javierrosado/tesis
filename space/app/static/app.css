@@ -1,0 +1,31 @@
+:root{--fondo:#f6f7f9;--panel:#fff;--texto:#1d2430;--tenue:#667085;--borde:#e3e7ee;--acento:#1f3a5f;--acento2:#2e6bd6;
+--ok:#1f8a4c;--esp:#c27c0e;--mal:#c0362c;--esc:#7a3fb5;--gov:#d4622a;--curso:#2e6bd6;--pend:#9aa3b2}
+@media (prefers-color-scheme:dark){:root{--fondo:#12161d;--panel:#1a2029;--texto:#e6e9ef;--tenue:#98a2b3;--borde:#2a3240;--acento:#8fb3ff;--acento2:#8fb3ff}}
+*{box-sizing:border-box}body{margin:0;font:14px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:var(--fondo);color:var(--texto)}
+header{display:flex;align-items:center;gap:16px;padding:8px 16px;background:var(--panel);border-bottom:1px solid var(--borde);position:sticky;top:0;z-index:5;flex-wrap:wrap}
+.marca{display:flex;align-items:center;gap:8px;font-weight:600;color:var(--acento)}
+nav{display:flex;gap:4px;flex-wrap:wrap;flex:1}nav a{padding:6px 10px;border-radius:6px;color:var(--texto);text-decoration:none}
+nav a.activo{background:var(--acento);color:#fff}.usuario{color:var(--tenue);font-size:13px}
+main{padding:16px;max-width:1400px;margin:0 auto}h2{margin:4px 0 12px;font-size:18px}h3{font-size:15px;margin:16px 0 8px}
+.tenue{color:var(--tenue)}.aviso{margin:8px 16px;padding:8px 12px;border-radius:6px;background:#fdecea;color:#8a1c12}
+.tarjetas{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:12px}.tarjeta{background:var(--panel);border:1px solid var(--borde);border-radius:8px;padding:10px 14px;min-width:150px}
+.tarjeta b{display:block;font-size:22px}table{border-collapse:collapse;width:100%;background:var(--panel);border:1px solid var(--borde);border-radius:8px;overflow:hidden}
+th,td{padding:6px 8px;border-bottom:1px solid var(--borde);text-align:left;vertical-align:top}th{font-weight:600;background:color-mix(in srgb,var(--panel) 90%,var(--acento))}
+tr.clic{cursor:pointer}tr.clic:hover{background:color-mix(in srgb,var(--panel) 92%,var(--acento2))}
+.chip{display:inline-block;padding:1px 8px;border-radius:10px;font-size:12px;color:#fff;white-space:nowrap}
+.e-aprobado{background:var(--ok)}.e-esperando_gate{background:var(--esp)}.e-devuelto{background:var(--mal)}.e-error{background:var(--mal)}
+.e-escalado{background:var(--esc)}.e-rechazado_governance{background:var(--gov)}.e-en_curso{background:var(--curso)}.e-pendiente{background:var(--pend)}
+.dag{display:grid;grid-template-columns:repeat(5,minmax(150px,1fr));gap:10px}.etapa{background:var(--panel);border:1px solid var(--borde);border-radius:8px;padding:8px}
+.nodo{border:1px solid var(--borde);border-radius:6px;padding:6px;margin:6px 0;cursor:pointer}.nodo:hover{border-color:var(--acento2)}
+.nodo small{display:block;color:var(--tenue);overflow-wrap:anywhere}
+.pestanas{display:flex;gap:4px;margin:12px 0 0;flex-wrap:wrap}.pestanas button{border:1px solid var(--borde);background:var(--panel);color:var(--texto);padding:6px 10px;border-radius:6px 6px 0 0;cursor:pointer}
+.pestanas button.activo{background:var(--acento);color:#fff}
+pre{background:var(--panel);border:1px solid var(--borde);border-radius:6px;padding:10px;overflow:auto;max-height:520px;font-size:12px;white-space:pre-wrap}
+button.b,input[type=submit]{background:var(--acento);color:#fff;border:0;padding:7px 12px;border-radius:6px;cursor:pointer}button.b.sec{background:var(--panel);color:var(--texto);border:1px solid var(--borde)}
+button.b.peligro{background:var(--mal)}button:disabled{opacity:.5;cursor:not-allowed}
+label{display:block;margin:6px 0 2px;font-weight:500}input,select,textarea{width:100%;padding:6px 8px;border:1px solid var(--borde);border-radius:6px;background:var(--panel);color:var(--texto);font:inherit}
+textarea{min-height:70px}.rejilla{display:grid;grid-template-columns:1fr 1fr;gap:12px}.fila{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.gate{background:var(--panel);border:1px solid var(--borde);border-radius:8px;padding:12px;margin-bottom:12px}.gate.disc{border-color:var(--esp);box-shadow:inset 4px 0 0 var(--esp)}
+.hallazgo{font-size:13px;margin:2px 0}.sev-critica,.sev-mayor{color:var(--mal);font-weight:600}.sev-menor{color:var(--tenue)}
+dialog{max-width:900px;width:92vw;border:1px solid var(--borde);border-radius:8px;background:var(--panel);color:var(--texto)}
+@media (max-width:760px){.dag{grid-template-columns:1fr}.rejilla{grid-template-columns:1fr}.solo-desktop{display:none!important}header{gap:8px}main{padding:10px}}

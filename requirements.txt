@@ -6,6 +6,7 @@ pytest==9.2.0
 openapi-spec-validator==0.9.0
 fastapi==0.162.5
 httpx==0.28.1
+python-multipart==0.0.32   # consola del piloto (space/, Fase C)
 ruff==0.17.6
 bandit==1.9.4
 # análisis estadístico del piloto (scripts/contraste.py, protocolo F5 v2) — versiones verificadas el 23/11/2026

@@ -66,6 +66,9 @@
 | 2026-11-24 | Ensayo | ensayo1 | 6b05ebfed0582cfbbefcf1eb | a100-large | 1101 s | ~0,76 | ídem + D-E6 | SIM-P05-R001..R003 (`ensayo1`) | — | ronda 16: release R001 con rollback ejecutable; R003 JSON inválido | ⚠️ |
 | 2026-11-24 | Ensayo | ensayo1 | 6b05f737d0582cfbbefd02b3 | a100-large | 1096 s | ~0,76 | ídem | SIM-P05-R001..R003 (`ensayo1`) | — | ronda 17: **R001 desplegado** (DEP-SIM-P05-R001, Actions 45489360359, ok); R002 BR-012 correcta, semillas desalineadas | ✅ |
 | 2026-11-24 | Ensayo | ensayo1 | 6b0603591460ffe1d5e92522 | a100-large | 521 s | ~0,36 | ídem | SIM-P05-R001..R003 (`ensayo1`) | — | ronda 18: R002 y R003 en espera de gates; ensayo cerrado | ✅ |
+| 2026-11-24 | Fase A consola | f5-consola-huecos | 6b06443dd0582cfbbefd7117 | a100-large | 395 s | ~0,27 | 8B + 5 LoRA + maestro | R001 (`humo_a_manual`, puertas manuales) | — | G2 (`*.input.r0.json` con repo@sha), G3 (líneas EVENT) y **G5: dictamen del 32B en la puerta** (devolver por PO-3, 8,7 s) | ✅ |
+| 2026-11-24 | Fase A consola | f5-consola-huecos | 6b06443b1460ffe1d5e98dc9 | a100-large | 1041 s | ~0,72 | 8B + 5 LoRA + maestro | R001..R003 (`humo_a_auto`) | — | R001 desplegado · R002 no-go (4/4 pruebas fallan) · R003 rechazado en qa-automation (3 rondas) | ✅ |
+| 2026-11-24 | G4 | f5-consola-huecos | 6b0654521460ffe1d5e9a8db | a100-large | 455 s | ~0,32 | base vs LoRA product-analyst, BusinessRequest v1.0 vs v1.1 (contexto sintético del maestro) | tesis-sft-v2 test (24) | — | aprobación r0: LoRA 95,8 → 95,8 % · base 91,7 → 95,8 %; McNemar p = 1,0 → **el adaptador se mantiene** | ✅ |
 
 > **ensayo1 (23–24/11/2026):** 20 jobs, 12059 s de A100 (≈ USD 8,4). Ensayo informal previo al piloto; sus resultados **no** se reportan como resultados del piloto. Hallazgos en `docs/ENSAYO1.md`.
 

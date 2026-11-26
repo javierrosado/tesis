@@ -9,7 +9,7 @@
 #
 # Mientras `activo: false`, el pipeline es idéntico a la v1 (piloto1 congelado como v1.0-piloto si N4 no cierra a tiempo).
 
-activo: false
+activo: true                   # N4 cerrado el 25/11/2026 (decisión de Javier sobre el benchmark 6b076df2)
 para_proveedor: vllm_local
 
 niveles:                       # E0 por nivel; N4 lo reemplaza agente por agente en `asignacion`
@@ -17,7 +17,14 @@ niveles:                       # E0 por nivel; N4 lo reemplaza agente por agente
   N2: vllm_local
   N3: vllm_teacher             # Qwen3-32B-AWQ hasta que N4 asigne Frontera A/B
 
-asignacion: {}                 # ejemplo tras N4: {solution-architect-agent: hf_glm53, code-review-agent: hf_dsv4pro}
+asignacion:                    # N4 · benchmark N3 6b076df2 (28 casos): runs/bench_n3/6b076df2d91f621b93093034
+  solution-architect-agent: hf_glm53      # Frontera A · gana por pares a V4-Pro 25–5 (p = 0,0003) y a Flash 29–1
+  data-model-agent: hf_glm53              # Frontera A · ronda 0: 86 % (V4-Pro 66 %, Flash 52 %); pares sin diferencia significativa
+  security-compliance-agent: hf_glm53     # Frontera A · gana por pares a V4-Pro 26–4 (p = 0,0001) y a Flash 29–1
+  backend-developer-agent: hf_glm53       # Frontera A · empate en pruebas (54 / 54 / 51 %, p ≥ 0,40); menor latencia (8 s)
+  code-review-agent: hf_dsv4flash         # Frontera B · menos falsos positivos (5,1) y mejor localización (45 %), al 10 % del costo
+# DeepSeek V4-Pro queda fuera (no gana en ningún agente, el más caro y lento). E4 no se activa: Claude no supera a los
+# modelos abiertos en code-review ni en security, así que no entra al pipeline del piloto.
 
 # Traducción de reasoning_effort al parámetro OpenAI-compatible `reasoning_effort` de los proveedores que lo aceptan.
 # Los proveedores sin `acepta_reasoning_effort: true` lo ignoran (p. ej. Qwen3 en vLLM, que corre sin modo de razonamiento).

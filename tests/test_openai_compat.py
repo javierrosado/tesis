@@ -53,3 +53,19 @@ def test_anthropic_cae_a_tool_choice_auto(monkeypatch):
     assert r.text == '{"ok": 1}' and llamadas == ["tool", "auto"] and r.meta["costo_usd"] == 0.014
     ad.complete([{"role": "user", "content": "x"}], {"type": "object"})
     assert llamadas[-1] == "auto"
+
+
+def test_respuesta_cortada_por_longitud_reintenta(monkeypatch):
+    """humo N4 (26/11): finish_reason=length con JSON a medias se trata como vacío."""
+    from core.adapters.openai_compat import OpenAICompatAdapter
+    ad = OpenAICompatAdapter({"model": "m", "max_new_tokens": 100})
+    vistos = []
+
+    def post(body):
+        vistos.append(body["max_tokens"])
+        corta = len(vistos) == 1
+        return {"choices": [{"message": {"content": '{"a": [1,' if corta else '{"a": [1, 2]}'}, "finish_reason": "length" if corta else "stop"}],
+                "usage": {"cost": 0.01}}
+    monkeypatch.setattr(ad, "_post", post)
+    r = ad.complete([{"role": "user", "content": "x"}])
+    assert r.text == '{"a": [1, 2]}' and vistos == [100, 200]

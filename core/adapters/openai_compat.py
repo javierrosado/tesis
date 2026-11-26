@@ -68,17 +68,21 @@ class OpenAICompatAdapter:
         (DeepSeek V4-Pro en eval_n3, 25/11): se reintenta una vez con el doble de tokens y, si sigue vacío, se informa."""
         ch = r["choices"][0]
         txt = (ch.get("message") or {}).get("content")
-        if txt:
+        if txt and ch.get("finish_reason") != "length":
             return txt, r
+        # humo N4 (26/11): GLM-5.3 cortó el JSON del backend por max_tokens (finish_reason=length); se trata igual que vacío
         if body.get("max_tokens", 0) < 65536 and not body.get("_reintento_vacio"):
             body2 = {**body, "max_tokens": body["max_tokens"] * 2}
             r2 = self._post(body2)
             # T24: el primer intento también se cobra; se suma para que la telemetría no subregistre
             u2 = r2.setdefault("usage", {})
             u2["cost"] = float(u2.get("cost") or 0) + float((r.get("usage") or {}).get("cost") or 0)
-            if (r2["choices"][0].get("message") or {}).get("content"):
-                return r2["choices"][0]["message"]["content"], r2
-            ch = r2["choices"][0]
+            c2 = r2["choices"][0]
+            if (c2.get("message") or {}).get("content") and c2.get("finish_reason") != "length":
+                return c2["message"]["content"], r2
+            ch = c2
+        if txt:                                  # sigue cortada con el doble: se entrega y el contrato decide (reintento de ModelPort)
+            return (ch.get("message") or {}).get("content") or txt, r
         raise RuntimeError(f"respuesta sin contenido (finish_reason={ch.get('finish_reason')}, uso={r.get('usage')})")
 
     def complete(self, messages, schema=None, tools=None) -> ModelResponse:

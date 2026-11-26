@@ -71,6 +71,17 @@ def signatures(api_design: dict) -> dict[str, str]:
     return sig
 
 
+def _cuerpo(lineas: list[str] | None) -> list[str]:
+    """Cuerpo del handler tal como lo espera render_app: sin la línea `def` (la firma la pone el sistema) y sin sangría
+    común. eval_n3 (25/11) y humo N4 (26/11): los modelos de frontera repetían la firma o sangraban todo el cuerpo, y el
+    servicio no se podía importar. Un cuerpo ya correcto (LoRA de la v1) no cambia."""
+    if not lineas:
+        return []
+    if lineas[0].lstrip().startswith("def "):
+        lineas = lineas[1:]
+    return textwrap.dedent("\n".join(lineas)).splitlines()
+
+
 def _con_import_pytest(lineas: list[str]) -> str:
     texto = "\n".join(lineas) + "\n"
     if "pytest." in texto and not any(l.strip() in ("import pytest",) or l.startswith("import pytest") for l in lineas):
@@ -118,7 +129,7 @@ def render_app(api_design: dict, data_model: dict, backend: dict) -> dict[str, s
         if ep.get("cuerpo"):
             params.append("body: dict = Body(...)"); call.append("body=body")
         status = (ep.get("respuestas") or [{"status": 200}])[0]["status"]
-        lines = handlers.get(ep["id"]) or ['raise HTTPException(status_code=501, detail="no implementado")']
+        lines = _cuerpo(handlers.get(ep["id"])) or ['raise HTTPException(status_code=501, detail="no implementado")']
         body = textwrap.indent("\n".join(lines), "    ")
         sig = ", ".join(params)
         out += [f"def _{fn}({sig}):", body, "", "",

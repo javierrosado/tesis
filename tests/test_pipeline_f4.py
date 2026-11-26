@@ -272,3 +272,17 @@ def test_dictamen_sin_maestro_queda_solo_governance():
     d = dictamen.dictaminar(ROOT, None, "release_plan", "release_manager", {"release": {}}, {"veredicto": "aprobado", "hallazgos": []}, {}, {})
     assert d["estado"] == "solo_governance" and d["recomendacion"] == "approved" and d["checklist"] == "RM"
     assert [i for i, _ in dictamen.checklist(ROOT)["RM"]] == ["RM-1", "RM-2", "RM-3", "RM-4"]
+
+
+def test_remediacion_hereda_handlers_faltantes(tmp_path):
+    """Humo N4 2 (26/11): la nueva versión del backend trae solo los handlers que cambia; el resto se hereda."""
+    from core.orchestrator import Orchestrator
+    from core.telemetry import Telemetry
+    o = Orchestrator(ROOT, Telemetry(tmp_path / "t.jsonl"), today="2026-11-24")
+    prev = {"req_id": "X", "handlers": [{"endpoint": "EP-001", "lineas": ["return 1"]}, {"endpoint": "EP-002", "lineas": ["return 2"]}],
+            "semillas": [{"tabla": "t", "filas": []}]}
+    nuevo = {"req_id": "X", "handlers": [{"endpoint": "EP-002", "lineas": ["return 22"]}], "semillas": []}
+    out = o._completar_handlers("backend-developer-agent", nuevo, {"req_id": "X", "backend_code": prev})
+    assert [h["lineas"] for h in out["handlers"]] == [["return 22"], ["return 1"]] and out["semillas"] == prev["semillas"]
+    assert o._completar_handlers("backend-developer-agent", nuevo, {"req_id": "X"}) is nuevo     # primera versión: nada que heredar
+    assert o._completar_handlers("api-designer-agent", nuevo, {"req_id": "X", "backend_code": prev}) is nuevo

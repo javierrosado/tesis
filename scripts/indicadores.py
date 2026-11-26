@@ -5,6 +5,7 @@ los agentes especializados (QLoRA, F3) con los no entrenados:
   - lora    : Qwen3-8B + adaptador QLoRA del agente (model_id = nombre del agente)
   - base    : Qwen3-8B sin adaptar
   - maestro : Qwen3-32B-AWQ (D-F4-1 opción C: backend, QA, code-review)
+  - frontera: modelo de HF Inference Providers asignado por N4 (GLM-5.3, DeepSeek V4-Flash)
 
 Uso:  python scripts/indicadores.py telemetria/*.jsonl [--md salida.md] [--csv salida.csv]
       python scripts/indicadores.py telemetria/*.jsonl registros/*.jsonl --estado piloto/piloto1/estado --piloto piloto1 \
@@ -42,6 +43,8 @@ def clase(model_id: str | None, agent: str) -> str:
         return "determinista"
     if model_id == agent:
         return "lora"
+    if ":" in model_id or model_id.startswith(("zai-org/", "deepseek-ai/", "claude")):   # v2 (N4): HF Inference Providers
+        return "frontera"
     return "maestro" if "32B" in model_id else "base"
 
 

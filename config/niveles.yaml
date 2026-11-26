@@ -9,6 +9,7 @@
 #
 # Mientras `activo: false`, el pipeline es idéntico a la v1 (piloto1 congelado como v1.0-piloto si N4 no cierra a tiempo).
 
+rescate_maestro: true          # tras agotar sus rondas, un agente Qwen3-8B (N1/N2) tiene una ronda más con el maestro 32B (humo N4 3)
 activo: true                   # N4 cerrado el 25/11/2026 (decisión de Javier sobre el benchmark 6b076df2)
 para_proveedor: vllm_local
 

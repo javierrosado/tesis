@@ -83,3 +83,13 @@ def test_asignacion_n4_vigente():
                                        "security-compliance-agent": "hf_glm53", "backend-developer-agent": "hf_glm53",
                                        "code-review-agent": "hf_dsv4flash"}
     assert "claude_ref" not in r.niveles["asignacion"].values()
+
+
+def test_rescate_maestro_solo_para_qwen(monkeypatch):
+    """Humo N4 3 (26/11): la ronda de rescate con el maestro aplica a los N1/N2 de Qwen3-8B, no a los N3 de frontera."""
+    monkeypatch.setenv("PIPELINE_PROVIDER", "vllm_local"); monkeypatch.delenv("NIVELES", raising=False)
+    r = Registry(ROOT)
+    assert r.niveles["rescate_maestro"] is True
+    assert r.correccion_provider("domain-modeling-agent")[0] == "vllm_teacher"
+    assert r.correccion_provider("api-designer-agent")[0] == "vllm_teacher"
+    assert r.correccion_provider("solution-architect-agent") is None and r.correccion_provider("code-review-agent") is None

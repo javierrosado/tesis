@@ -89,8 +89,8 @@ def test_modelo_diferido_pausa_sin_sustituir(tmp_path, monkeypatch):
     root = Path(__file__).resolve().parents[1]
     monkeypatch.setenv("PIPELINE_PROVIDER", "vllm_local"); monkeypatch.setenv("GATES_MODE", "auto")
     o = Orchestrator(root, Telemetry(tmp_path / "t.jsonl", run_id="t"), today="2026-11-24")
-    assert o.reg.provider_for("backend-developer-agent")[0] == "vllm_teacher"
-    monkeypatch.setenv("PROVIDERS_DOWN", "vllm_teacher")
+    assert o.reg.provider_for("backend-developer-agent")[0] == "hf_glm53@alto"        # N4: Frontera A por HF Inference Providers
+    monkeypatch.setenv("PROVIDERS_DOWN", "hf_glm53")
     try:
         o._port(o.reg.agents["backend-developer-agent"]); assert False
     except ModelDeferred:

@@ -67,6 +67,8 @@ for m in MODELOS:
     except Exception:  # noqa: BLE001
         ENTORNO["modelos"][m] = cfg["model"]          # p. ej. Claude: model_id fijado, sin repo en HF
 print("MODELOS", json.dumps(ENTORNO["modelos"], ensure_ascii=False), "· casos", len(casos), flush=True)
+from core import costos as _costos                          # noqa: E402
+GASTO_INI = _costos.gasto_ip_usd()
 
 
 def J(p: Path):
@@ -332,6 +334,7 @@ for a in {x["agente"] for x in duelos}:
         res[par] = {"n": len(xs), f"gana_{m1}": g1, f"gana_{m2}": g2, "empates": len(xs) - g1 - g2, "p_signo": round(float(p), 4)}
     tabla.setdefault(a, {})["juez_pares"] = res
 tabla["_costo_juez_usd"] = round(sum(x["costo_usd"] for x in duelos), 4)
+tabla["_hf_facturacion"] = _costos.diferencia(GASTO_INI, _costos.gasto_ip_usd())   # T24: gasto real de HF en la ventana del job
 tabla["_casos_claude"] = sorted(CASOS_CLAUDE)
 d = Path("/tmp/bench"); d.mkdir(exist_ok=True)
 (d / "duelos.jsonl").write_text("".join(json.dumps(x, ensure_ascii=False) + "\n" for x in duelos), encoding="utf-8")

@@ -73,6 +73,9 @@ class OpenAICompatAdapter:
         if body.get("max_tokens", 0) < 65536 and not body.get("_reintento_vacio"):
             body2 = {**body, "max_tokens": body["max_tokens"] * 2}
             r2 = self._post(body2)
+            # T24: el primer intento también se cobra; se suma para que la telemetría no subregistre
+            u2 = r2.setdefault("usage", {})
+            u2["cost"] = float(u2.get("cost") or 0) + float((r.get("usage") or {}).get("cost") or 0)
             if (r2["choices"][0].get("message") or {}).get("content"):
                 return r2["choices"][0]["message"]["content"], r2
             ch = r2["choices"][0]

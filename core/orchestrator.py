@@ -80,7 +80,8 @@ class Orchestrator:
     def _port(self, agent, correccion: bool = False):
         alt = self.reg.correccion_provider(agent.name) if correccion else None     # D-E1: la corrección tras devolución humana la hace el maestro
         name, cfg = alt if alt else self.reg.provider_for(agent.name)
-        if name in [x for x in os.environ.get("PROVIDERS_DOWN", "").split(",") if x]:
+        caidos = [x for x in os.environ.get("PROVIDERS_DOWN", "").split(",") if x]
+        if name in caidos or name.split("@")[0] in caidos:          # v2: "hf_glm53@alto" cae si cae hf_glm53
             raise ModelDeferred(f"{agent.name}: {name}")
         return ModelPort(self.reg.adapter_by_name(name, cfg) if alt else self.reg.adapter_for(agent.name), self.tel, max_retries=2)
 

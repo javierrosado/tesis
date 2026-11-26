@@ -73,3 +73,13 @@ def test_adaptador_hf_providers_envia_token_y_esfuerzo(monkeypatch):
     b = OpenAICompatAdapter({**r.providers_cfg["providers"]["hf_glm53"], "reasoning_effort": "high"})
     b.complete([{"role": "user", "content": "x"}], {"title": "s", "type": "object"})
     assert enviados[-1][1]["reasoning_effort"] == "high" and "response_format" in enviados[-1][1]
+
+
+def test_asignacion_n4_vigente():
+    """N4 (25/11/2026): Frontera A = GLM-5.3 en SA, data-model, security y backend; Frontera B = DeepSeek V4-Flash en code-review."""
+    r = Registry(ROOT)
+    assert r.niveles["activo"] is True
+    assert r.niveles["asignacion"] == {"solution-architect-agent": "hf_glm53", "data-model-agent": "hf_glm53",
+                                       "security-compliance-agent": "hf_glm53", "backend-developer-agent": "hf_glm53",
+                                       "code-review-agent": "hf_dsv4flash"}
+    assert "claude_ref" not in r.niveles["asignacion"].values()

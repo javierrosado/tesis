@@ -46,6 +46,12 @@ class Scheduled(Exception):
     """El despliegue está programado para una ventana futura (política de release)."""
 
 
+class Escalated(Exception):
+    """D-8.1 (26/11/2026): un agente agotó sus rondas de governance (y el rescate) en modo automático. El requerimiento
+    queda escalado con su última versión y los hallazgos, igual que en el piloto con gates manuales, en vez de terminar
+    en error; la tasa de escalamiento por agente se reporta como resultado."""
+
+
 class ModelDeferred(Exception):
     """El modelo que atiende al agente no se levantó en esta corrida (p. ej. el maestro, D-F4-1 C): el requerimiento
     se pausa y sigue en la próxima ventana con ese modelo; nunca se sustituye por otro modelo."""
@@ -308,6 +314,15 @@ class Orchestrator:
             feedback = (feedback0 or []) + verdict["hallazgos"]   # las devoluciones humanas siguen vigentes en las rondas de governance
             anterior = None
         self.tel.emit(event="escalation", req_id=req_id, agent=agent_name, round=max_rounds + (1 if rescate else 0), to=agent.gate["role"] if agent.gate else "tech_lead", reason="max_rounds")
+        rol = agent.gate["role"] if agent.gate else "tech_lead"
+        if self.reg.gates.get("mode") != "manual":
+            req = {"artefacto": name, "rol": rol, "hash": _hash(out), "solicitado": _now(), "agente": agent_name,
+                   "escalado": True, "modo": "auto", "hallazgos_governance": verdict["hallazgos"]}
+            pend = self._out_dir(req_id) / "pendientes"; pend.mkdir(exist_ok=True)
+            (pend / f"{name}.json").write_text(json.dumps(req, ensure_ascii=False, indent=1), encoding="utf-8")
+            gate = {"decision": "pending", "role": rol, "by": "human", "riesgo": "escalado", "hash": req["hash"], "solicitado": req["solicitado"]}
+            self._save(ctx, name, out, {"verdict": verdict, "f5": f5, "gate": gate, "model": stats, "rounds": max_rounds, "escalado": True})
+            raise Escalated(f"{req_id}/{name}: {', '.join(sorted({h.get('regla', '?') for h in verdict['hallazgos']}))}")
         if self.reg.gates.get("mode") == "manual" and agent.gate:
             # Escalamiento (F3 de cada ficha): el humano decide sobre la última versión con los hallazgos a la vista
             req = {"artefacto": name, "rol": agent.gate["role"], "hash": _hash(out), "solicitado": _now(), "agente": agent_name,
@@ -541,6 +556,11 @@ class Orchestrator:
             self._estado(req_id, estado="esperando_aprobacion", pendiente=str(e))
             self.tel.emit(event="pipeline_paused", req_id=req_id, reason="pending_approval", pendiente=str(e))
             ctx["_estado"] = "esperando_aprobacion"
+            return ctx
+        except Escalated as e:
+            self._estado(req_id, estado="escalado", escalado=str(e))
+            self.tel.emit(event="pipeline_paused", req_id=req_id, reason="escalated", escalado=str(e))
+            ctx["_estado"] = "escalado"
             return ctx
         except ModelDeferred as e:
             self._estado(req_id, estado="esperando_modelo", modelo=str(e))

@@ -286,3 +286,27 @@ def test_remediacion_hereda_handlers_faltantes(tmp_path):
     assert [h["lineas"] for h in out["handlers"]] == [["return 22"], ["return 1"]] and out["semillas"] == prev["semillas"]
     assert o._completar_handlers("backend-developer-agent", nuevo, {"req_id": "X"}) is nuevo     # primera versión: nada que heredar
     assert o._completar_handlers("api-designer-agent", nuevo, {"req_id": "X", "backend_code": prev}) is nuevo
+
+
+def test_auto_escalamiento_en_vez_de_error(tmp_path, monkeypatch):
+    """D-8.1 (26/11): en modo auto, un agente que agota sus rondas deja el requerimiento escalado (no en error)."""
+    import shutil
+    from core.orchestrator import Orchestrator
+    from core.telemetry import Telemetry
+    monkeypatch.setenv("PIPELINE_PROVIDER", "prueba_offline"); monkeypatch.setenv("GATES_MODE", "auto")
+    out = ROOT / "data/requerimientos/SIM-P05-R001/output"; shutil.rmtree(out, ignore_errors=True)
+    o = Orchestrator(ROOT, Telemetry(tmp_path / "t.jsonl"), seed=1, today="2026-11-24")
+    orig = o._review
+
+    def review(agent, art, ctx, round_):
+        v, ok, f5 = orig(agent, art, ctx, round_)
+        if agent.name == "domain-modeling-agent":
+            v = {**v, "veredicto": "rechazado", "hallazgos": [{"regla": "F5.transitions_complete", "severidad": "bloqueante", "detalle": "x"}]}
+        return v, ok, f5
+    monkeypatch.setattr(o, "_review", review)
+    ctx = o.run("SIM-P05-R001")
+    assert ctx["_estado"] == "escalado"
+    import json
+    pend = json.loads((out / "pendientes" / "domain_model.json").read_text(encoding="utf-8"))
+    assert pend["escalado"] and pend["modo"] == "auto" and pend["hallazgos_governance"][0]["regla"] == "F5.transitions_complete"
+    shutil.rmtree(out, ignore_errors=True)

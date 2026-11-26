@@ -221,6 +221,24 @@ class Orchestrator:
             return json.loads((d / f"{name}.json").read_text(encoding="utf-8")), json.loads((d / f"{name}.decision.json").read_text(encoding="utf-8"))
         return None
 
+    def _completar_handlers(self, agent_name: str, out: dict, ctx: dict) -> dict:
+        """Humo N4 2 (26/11): en la remediación, GLM-5.3 devolvió solo los handlers que cambiaba y governance rechazó 5 veces
+        por F5.routes_coverage. Los endpoints que la nueva versión no trae se heredan de la versión anterior (y sus
+        semillas si vienen vacías); queda constancia en el evento `handlers_heredados`. En la primera versión no hay nada que heredar."""
+        prev = ctx.get("backend_code") if agent_name == "backend-developer-agent" else None
+        if not prev or not isinstance(out, dict) or not isinstance(out.get("handlers"), list):
+            return out
+        tiene = {h.get("endpoint") for h in out["handlers"]}
+        heredados = [h for h in prev.get("handlers", []) if h.get("endpoint") not in tiene]
+        if not heredados and out.get("semillas"):
+            return out
+        out = {**out, "handlers": out["handlers"] + heredados}
+        if not out.get("semillas") and prev.get("semillas"):
+            out["semillas"] = prev["semillas"]
+        self.tel.emit(event="handlers_heredados", req_id=ctx.get("req_id"), agent=agent_name,
+                      endpoints=sorted(h.get("endpoint") for h in heredados))   # el artefacto no lleva campos fuera de su schema
+        return out
+
     def run_agent(self, agent_name: str, payload: dict, ctx: dict, feedback0: list | None = None, force: bool = False, defer_gate: bool = False) -> dict:
         agent = self.reg.agents[agent_name]; name = ARTEFACT_NAME[agent_name]; req_id = ctx["req_id"]
         anterior = None
@@ -256,6 +274,7 @@ class Orchestrator:
             msgs = self._messages(agent, payload, knowledge, feedback, anterior)
             self._registrar_input(agent, req_id, name, round_, payload, knowledge, knowledge_refs, msgs, feedback, port, correccion)
             out, stats = port.run(agent, req_id, msgs, variant=f"r{round_}")
+            out = self._completar_handlers(agent_name, out, ctx)
             self._stamp_provenance(agent, out, req_id)
             verdict, ok_f5, f5 = self._review(agent, out, ctx, round_)
             if verdict["veredicto"] == "rechazado":

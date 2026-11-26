@@ -269,10 +269,18 @@ class Orchestrator:
         correccion = anterior is not None
         if correccion:
             self.tel.emit(event="correccion_humana", req_id=req_id, agent=agent_name, artefact=name, devoluciones=len(feedback0 or []))
-        for round_ in range(max_rounds + 1):
-            port = self._port(agent, correccion)
+        # Rescate por el maestro (humo N4 3, 26/11): los agentes de Qwen3-8B (N1/N2) caían por variabilidad en reglas de
+        # forma (eventos no declarados, referencias SEC/ERR) en un requerimiento distinto cada corrida. Agotadas sus rondas,
+        # el maestro 32B hace una ronda más con todos los hallazgos. Solo si hay un maestro para ese agente (no aplica a
+        # los N3 de frontera) y `rescate_maestro: true` en config/niveles.yaml. Se registra como evento y en el input.
+        rescate = bool((self.reg.niveles or {}).get("rescate_maestro")) and self.reg.correccion_provider(agent_name) is not None
+        for round_ in range(max_rounds + 1 + (1 if rescate else 0)):
+            en_rescate = round_ > max_rounds
+            if en_rescate:
+                self.tel.emit(event="rescate_maestro", req_id=req_id, agent=agent_name, round=round_)
+            port = self._port(agent, correccion or en_rescate)
             msgs = self._messages(agent, payload, knowledge, feedback, anterior)
-            self._registrar_input(agent, req_id, name, round_, payload, knowledge, knowledge_refs, msgs, feedback, port, correccion)
+            self._registrar_input(agent, req_id, name, round_, payload, knowledge, knowledge_refs, msgs, feedback, port, correccion or en_rescate)
             out, stats = port.run(agent, req_id, msgs, variant=f"r{round_}")
             out = self._completar_handlers(agent_name, out, ctx)
             self._stamp_provenance(agent, out, req_id)
@@ -299,7 +307,7 @@ class Orchestrator:
                 return out
             feedback = (feedback0 or []) + verdict["hallazgos"]   # las devoluciones humanas siguen vigentes en las rondas de governance
             anterior = None
-        self.tel.emit(event="escalation", req_id=req_id, agent=agent_name, round=max_rounds, to=agent.gate["role"] if agent.gate else "tech_lead", reason="max_rounds")
+        self.tel.emit(event="escalation", req_id=req_id, agent=agent_name, round=max_rounds + (1 if rescate else 0), to=agent.gate["role"] if agent.gate else "tech_lead", reason="max_rounds")
         if self.reg.gates.get("mode") == "manual" and agent.gate:
             # Escalamiento (F3 de cada ficha): el humano decide sobre la última versión con los hallazgos a la vista
             req = {"artefacto": name, "rol": agent.gate["role"], "hash": _hash(out), "solicitado": _now(), "agente": agent_name,

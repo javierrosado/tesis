@@ -235,7 +235,8 @@ def metrics_qa(out: dict, ctx: dict) -> dict:
     propios = [f for f in rt["fallos"] if QA_OWN_ERROR.search(f["detalle"])]   # la prueba falla por su propio código, no por el servicio
     total = len(funciones_de_prueba(out))
     return {"tc_coverage": (len(tcs & got) / len(tcs)) if tcs else 1.0, "suite_runs": rt["suite_runs"] and rt["errors"] == 0 and not propios, "pass_rate": rt["pass_rate"],
-            "calls_service": (1 - len(pruebas_sin_servicio(out)) / total) if total else 1.0}
+            "calls_service": (1 - len(pruebas_sin_servicio(out)) / total) if total else 1.0,
+            "calls_valid": not llamadas_invalidas(out, ctx.get("api_design", {}))}
 
 
 TEST_DEF = re.compile(r"^(?:async\s+)?def\s+(test_\w+)\s*\(")
@@ -268,6 +269,45 @@ USES_REPO = re.compile(r"pytest|\./|requirements|deploy|uvicorn|python ")
 def needs_checkout(job: dict) -> bool:
     """El job usa archivos del repositorio pero no los descarga (cada job de GitHub Actions corre en una máquina nueva)."""
     return any(USES_REPO.search(s.get("run") or "") for s in job.get("steps", [])) and not any((s.get("uses") or "").startswith("actions/checkout@") for s in job.get("steps", []))
+
+
+def llamadas_invalidas(qa_suite: dict, api_design: dict) -> list[str]:
+    """Humo ADR-009 (26/11): las suites llamaban endpoints sin sus parámetros de consulta requeridos (422 en todas las
+    pruebas) y usaban `response.json[...]` sin llamar al método. Se detecta en el código de la prueba, antes de culpar al
+    servicio. Solo se miran llamadas con ruta literal y `params` como diccionario literal (o ausente)."""
+    import ast, textwrap
+    eps = []
+    for e in api_design.get("endpoints", []):
+        patron = re.compile("^" + re.sub(r"\\\{[^}]+\\\}", "[^/]+", re.escape(e["ruta"])) + "$")
+        req = [p["nombre"] for p in e.get("parametros", []) if p.get("en") == "query" and p.get("requerido")]
+        eps.append((e["metodo"].lower(), patron, req))
+    malas = []
+    for clave, cuerpo in funciones_de_prueba(qa_suite).items():
+        if re.search(r"\.json\s*\[", cuerpo):
+            malas.append(f"{clave}: usa response.json[...] sin llamar al método (debe ser response.json()[...])")
+            continue
+        try:
+            arbol = ast.parse(textwrap.dedent(cuerpo))
+        except SyntaxError:
+            continue
+        for n in ast.walk(arbol):
+            if not (isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute) and isinstance(n.func.value, ast.Name)
+                    and n.func.value.id == "client" and n.args and isinstance(n.args[0], ast.Constant) and isinstance(n.args[0].value, str)):
+                continue
+            ruta = n.args[0].value.split("?")[0]
+            enviados = set(re.findall(r"[?&]([^=&]+)=", n.args[0].value))
+            kw = {k.arg: k.value for k in n.keywords}
+            if "params" in kw:
+                if not isinstance(kw["params"], ast.Dict):
+                    continue
+                enviados |= {k.value for k in kw["params"].keys if isinstance(k, ast.Constant)}
+            for metodo, patron, req in eps:
+                if metodo == n.func.attr and patron.match(ruta):
+                    falta = [q for q in req if q not in enviados]
+                    if falta:
+                        malas.append(f"{clave}: {metodo.upper()} {ruta} sin el parámetro requerido {', '.join(falta)}")
+                    break
+    return malas
 
 
 QA_OWN_ERROR = re.compile(r"ModuleNotFoundError|ImportError|NameError|SyntaxError|fixture '[^']+' not found")

@@ -5,6 +5,7 @@ El sistema genera el servicio FastAPI: la función de cada endpoint EP-xxx (con 
 Reglas de trabajo:
 1. Un handler por endpoint, con su id EP-xxx. lineas es la lista de líneas del cuerpo, sin sangría inicial (el sistema la añade); usa 4 espacios para bloques internos.
 2. Usa solo Python estándar, `DB`, `HTTPException` y `datetime`. No importes nada más ni accedas a red o archivos.
+   La autenticación y la autorización las aplica el API gateway (ADR-009): no las implementes y nunca fijes en el código un id de consultora o de usuario; usa los identificadores de los parámetros.
 3. Aplica las reglas de negocio BR-xxx citadas en el diseño. Si un recurso no existe, `raise HTTPException(status_code=404, detail="...")`; si la entrada viola una regla, 400 o 422.
 4. Cada handler termina con `return` de un diccionario o lista JSON-serializable, coherente con el esquema de respuesta.
 5. semillas: filas de ejemplo por tabla del modelo de datos (mismos nombres de columnas, hasta 10 por tabla, solo de las tablas que leen los endpoints; columnas de auditoría con valores cortos) para que los endpoints de consulta respondan en las pruebas. Si una devolución pide pedidos de ejemplo concretos (IDs, estados, campañas), úsalos tal cual.

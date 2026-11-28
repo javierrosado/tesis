@@ -1,6 +1,6 @@
 # /// script
 # requires-python = ">=3.11"
-# dependencies = ["vllm==0.34.0", "xgrammar==0.2.8", "huggingface_hub==2.4.0", "jsonschema==4.26.0", "openapi-spec-validator==0.9.0", "PyYAML", "fastapi", "httpx", "uvicorn", "ruff", "bandit", "pytest"]
+# dependencies = ["vllm==0.34.0", "xgrammar==0.2.8", "huggingface_hub==2.4.0", "jsonschema==4.26.0", "openapi-spec-validator==0.9.0", "PyYAML==6.0.3", "fastapi==0.162.5", "httpx==0.29.0", "uvicorn==0.54.0", "ruff==0.17.6", "bandit==1.9.4", "pytest==9.2.0"]
 # ///
 """Corrida (o reanudación) del pipeline de 16 agentes sobre uno o varios requerimientos, en HF Jobs.
 
@@ -29,17 +29,34 @@ api = HfApi()
 PREP = os.environ.get("PREPARAR_EVAL")          # v2 · eval_n3: genera N requerimientos SIM-E0x con el maestro antes de correr
 # G6 (consola, D-C8): en el piloto real la entrada vive solo en el dataset privado (piloto/<p>/requerimientos/<REQ>/input),
 # nunca en GitHub; se trae antes de listar los requerimientos. El input no se modifica: es el que se registró en el alta.
+_del_dataset: list[str] = []
 try:
     _rq = Path(snapshot_download(RUNS, repo_type="dataset", allow_patterns=[f"piloto/{PILOT}/requerimientos/*/input/*"])) / "piloto" / PILOT / "requerimientos"
     for _d in sorted(_rq.iterdir()) if _rq.exists() else []:
         if (_d / "input").exists():
             (ROOT / "data/requerimientos" / _d.name).mkdir(parents=True, exist_ok=True)
             subprocess.run(["cp", "-rL", str(_d / "input"), str(ROOT / "data/requerimientos" / _d.name)], check=False)
+            _del_dataset.append(_d.name)
             print("entrada desde el dataset:", _d.name, flush=True)
 except Exception as e:  # noqa: BLE001
     print("sin requerimientos en el dataset:", str(e)[:120])
-reqs = sorted(p.name for p in (ROOT / "data/requerimientos").iterdir() if (p / "input").exists()) if os.environ.get("ALL") == "1" \
-    else [] if PREP else os.environ["REQS"].split(",")
+def _todos() -> list[str]:
+    """ALL=1 (consola, Scheduled Jobs): solo los requerimientos del piloto, nunca los 31 del repositorio. Son los dados de alta
+    en el dataset y, si no hay altas (ensayos), los que ya tienen estado en piloto/<p>/estado. ALL_REPO=1 recupera lo anterior."""
+    if os.environ.get("ALL_REPO") == "1":
+        return sorted(p.name for p in (ROOT / "data/requerimientos").iterdir() if (p / "input").exists())
+    if _del_dataset:
+        return sorted(_del_dataset)
+    try:
+        return sorted({f.split("/")[3] for f in api.list_repo_files(RUNS, repo_type="dataset")
+                       if f.startswith(f"piloto/{PILOT}/estado/") and f.count("/") >= 4})
+    except Exception as e:  # noqa: BLE001
+        print("sin estado para ALL:", str(e)[:120])
+        return []
+
+
+reqs = _todos() if os.environ.get("ALL") == "1" else [] if PREP else os.environ["REQS"].split(",")
+print("requerimientos:", ",".join(reqs) or "ninguno", flush=True)
 
 # 1) estado previo del piloto
 try:

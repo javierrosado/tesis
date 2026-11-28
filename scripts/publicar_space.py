@@ -25,11 +25,17 @@ ap = argparse.ArgumentParser()
 ap.add_argument("--space", default="jrosado1974/consola-piloto")
 ap.add_argument("--secrets", action="store_true", help="registra HF_TOKEN y GITHUB_TOKEN del entorno como secrets del Space")
 ap.add_argument("--tag", help="tag congelado que usará el job (CONSOLA_TAG)")
+ap.add_argument("--pilot", default="piloto1", help="piloto que muestra la consola (ensayos: ensayo1)")
+ap.add_argument("--runs-repo", default="jrosado1974/tesis-piloto", help="dataset del piloto (ensayos: jrosado1974/tesis-runs)")
 a = ap.parse_args()
 
 api = HfApi()
-variables = {"PILOT": "piloto1", "RUNS_REPO": "jrosado1974/tesis-piloto", "CONSOLA_FLAVOR": "a100-large",
-             "CONSOLA_USUARIOS": json.dumps({"jrosado1974": ["operador", "registrador", "aprobador"]})}
+ADAPTERS = " ".join(f"{a}-agent=jrosado1974/qwen3-8b-{a}-lora" for a in
+                    ("product-analyst", "solution-architect", "api-designer", "test-case-generator", "cicd-pipeline"))
+variables = {"PILOT": a.pilot, "RUNS_REPO": a.runs_repo, "CONSOLA_FLAVOR": "a100-large",
+             "CONSOLA_USUARIOS": json.dumps({"jrosado1974": ["operador", "registrador", "aprobador"]}),
+             # lo que el job del piloto necesita y la consola no conoce (v1.0-piloto): adaptadores QLoRA y repo de despliegue
+             "CONSOLA_JOB_ENV": json.dumps({"ADAPTERS": ADAPTERS, "DEPLOY_REPO": "javierrosado/tesis-sandbox"})}
 if a.tag:
     variables["CONSOLA_TAG"] = a.tag
 api.create_repo(a.space, repo_type="space", space_sdk="docker", private=True, exist_ok=True)
